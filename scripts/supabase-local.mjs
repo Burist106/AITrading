@@ -490,11 +490,14 @@ function verifyOuterBindings() {
   verifyOwnedSupportResources();
   const bindings = resource.NetworkSettings?.Ports ?? {};
   const expectedKeys = localPorts.map((port) => `${port}/tcp`).sort();
-  const actualKeys = Object.keys(bindings).sort();
+  const publishedKeys = Object.entries(bindings)
+    .filter(([, entries]) => Array.isArray(entries) && entries.length > 0)
+    .map(([key]) => key)
+    .sort();
 
   if (
-    actualKeys.length !== expectedKeys.length ||
-    actualKeys.some((key, index) => key !== expectedKeys[index])
+    publishedKeys.length !== expectedKeys.length ||
+    publishedKeys.some((key, index) => key !== expectedKeys[index])
   ) {
     fail("The isolated runtime has an unexpected published-port set");
   }
