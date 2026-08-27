@@ -1,8 +1,10 @@
 import type { SystemComponentHealth } from "@aurum/contracts";
 
 import type { ScenarioView } from "../lib/scenario";
+import { buildMt5ConsoleFixture } from "../lib/mt5-fixture";
 import { EmergencyStatePanel } from "./EmergencyStatePanel";
 import { PageIntro } from "./PageIntro";
+import { Mt5ReadOnlyPanel } from "./Mt5ReadOnlyPanel";
 import { Card, SectionHeading, StatusBadge, type Tone } from "./ui";
 
 const stateTone = {
@@ -149,6 +151,9 @@ export function HealthView({ view }: { view: ScenarioView }) {
           eyebrow="control-plane"
           components={control}
         />
+      </div>
+      <div className="mt-5">
+        <Mt5ReadOnlyPanel model={buildMt5ConsoleFixture(view.scenario)} />
       </div>
       <div className="mt-5">
         <EmergencyStatePanel state={view.emergency} />

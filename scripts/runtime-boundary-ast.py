@@ -41,7 +41,7 @@ NATIVE_ADAPTER_NAME = "native_mt5.py"
 
 def _is_mt5_receiver(node: ast.expr) -> bool:
     if isinstance(node, ast.Name):
-        return "mt5" in node.id.lower()
+        return "mt5" in node.id.lower() or node.id in {"module"}
     if isinstance(node, ast.Attribute):
         return "mt5" in node.attr.lower() or node.attr in {"_module", "module"}
     return False
@@ -87,7 +87,7 @@ def scan_source(source: str, reference: str) -> list[dict[str, object]]:
             )
         if isinstance(node.func, ast.Attribute):
             method = node.func.attr
-            if method in FORBIDDEN_METHODS:
+            if method in FORBIDDEN_METHODS or method.startswith("market_book_"):
                 findings.append(
                     {
                         "reference": reference,

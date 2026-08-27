@@ -38,7 +38,7 @@ Forbidden:
 
 ## Milestone 1 — Supabase Domain and Security Foundation
 
-Status (2026-08-26): **complete locally with documented limitations**. The schema, forced RLS, secured actions, durable queue, generated types, read-only Web adapters, and local database tests are implemented. No remote Supabase project was linked or changed. GitHub Actions verified the clean-checkout quality and database jobs on published implementation commit `ab7df47`; Worker restart/reconnect reconciliation remains a pre-execution gate. Milestone 2 has not started.
+Status (2026-08-26): **complete with documented limitations**. GitHub Actions verified the published Milestone 1 implementation on commit `ab7df47`. Milestone 2 extends this foundation without changing the Milestone 1 command semantics.
 
 Deliver:
 
@@ -58,6 +58,8 @@ Exit gate:
 
 ## Milestone 2 — Read-only Windows MT5 Worker
 
+Status (2026-08-28): **complete locally; Milestone 3 not started**. The official optional Windows package boundary, fake/native adapters, sanitized observations, owner-scoped Web reads, polling, health, and restart/reconnect reconciliation are implemented. The real-terminal smoke remains optional and is not evidence unless explicitly run.
+
 Deliver:
 
 - MT5 initialize/shutdown adapter
@@ -68,6 +70,8 @@ Deliver:
 - Open positions and order-history reads
 - Worker heartbeat and system health
 - Local fake MT5 adapter for CI
+- Sanitized owner-scoped Supabase observations and reconciliation evidence
+- Bounded Windows CI import/native-wrapper boundary
 
 Forbidden:
 

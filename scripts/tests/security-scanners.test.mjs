@@ -11,7 +11,10 @@ import {
   scanRepositorySecrets,
   scanText,
 } from "../lib/secret-scanner.mjs";
-import { scanRuntimeFiles } from "../runtime-boundary-check.mjs";
+import {
+  scanRuntimeFiles,
+  scanTypeScriptSource,
+} from "../runtime-boundary-check.mjs";
 
 const temporaryDirectories = [];
 const projectRoot = resolve(import.meta.dirname, "..", "..");
@@ -98,6 +101,7 @@ test("runtime boundary scan detects forbidden Python calls and dynamic dispatch"
     [
       "def unsafe(mt5, method_name):",
       "    mt5.order_send({})",
+      "    mt5.market_book_get('XAUUSD')",
       "    return getattr(mt5, method_name)()",
       "",
     ].join("\n"),
@@ -109,7 +113,22 @@ test("runtime boundary scan detects forbidden Python calls and dynamic dispatch"
     categories.some((value) => value.includes("order_send")),
     true,
   );
+  assert.equal(
+    categories.some((value) => value.includes("market_book_get")),
+    true,
+  );
   assert.equal(categories.includes("forbidden dynamic MT5 dispatch"), true);
+});
+
+test("runtime boundary scan rejects every market_book-prefixed call", () => {
+  const findings = scanTypeScriptSource(
+    "broker.market_book_subscribe('XAUUSD');\n",
+    "apps/worker/src/unsafe.ts",
+  );
+  assert.equal(
+    findings.some(({ category }) => category.includes("market_book_subscribe")),
+    true,
+  );
 });
 
 test("workflow actions are immutable and checkout credentials are not persisted", () => {

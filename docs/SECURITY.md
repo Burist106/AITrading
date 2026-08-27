@@ -1,14 +1,14 @@
-# Milestone 1 Security Model
+# Milestone 2 Security Model
 
 ## Scope
 
-Milestone 1 establishes a local Supabase authorization and data-integrity foundation. It does not connect to MetaTrader, evaluate a trading strategy, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project.
+Milestone 2 adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project.
 
 The invariant boundary is fixed:
 
 - environment `DEMO_ONLY`;
 - canonical asset `XAUUSD`;
-- initial and only Milestone 1 runtime mode `SHADOW`;
+- initial and only enabled runtime mode `SHADOW`;
 - maximum permitted volume `0.01` and at most one open Position;
 - mandatory Stop Loss for any represented proposal or open Position;
 - no Live Trading setting or alternate path;
@@ -16,15 +16,17 @@ The invariant boundary is fixed:
 
 ## Principals and trust boundaries
 
-| Principal               | Identity source                                                             | Direct table access                                                                                           | Function access                                                               |
-| ----------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `anon`                  | No authenticated subject                                                    | None                                                                                                          | None                                                                          |
-| `authenticated`         | Supabase Auth JWT; ownership is `auth.uid()`                                | Read owner-scoped rows; update only explicitly granted safe profile columns                                   | The nine owner intent functions only                                          |
-| `aurum_worker`          | Future dedicated Worker JWT with `role`, `owner_id`, and `worker_id` claims | No direct operational DML                                                                                     | Only Worker claim, lease, lifecycle, heartbeat, incident, and event functions |
-| `aurum_function_owner`  | Internal NOLOGIN database role                                              | Minimum privileges needed by secured functions, still constrained by explicit ownership checks and forced RLS | Owns secured functions; cannot authenticate as an application                 |
-| Migration administrator | Local CLI migration process                                                 | Schema administration                                                                                         | Not an application identity                                                   |
+| Principal               | Identity source                                                             | Direct table access                                                                                           | Function access                                                                               |
+| ----------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `anon`                  | No authenticated subject                                                    | None                                                                                                          | None                                                                                          |
+| `authenticated`         | Supabase Auth JWT; ownership is `auth.uid()`                                | Read owner-scoped rows; update only explicitly granted safe profile columns                                   | The nine owner intent functions only                                                          |
+| `aurum_worker`          | Future dedicated Worker JWT with `role`, `owner_id`, and `worker_id` claims | No direct operational or MT5-observation DML                                                                  | Existing Worker lifecycle functions plus seven sanitized observation/reconciliation functions |
+| `aurum_function_owner`  | Internal NOLOGIN database role                                              | Minimum privileges needed by secured functions, still constrained by explicit ownership checks and forced RLS | Owns secured functions; cannot authenticate as an application                                 |
+| Migration administrator | Local CLI migration process                                                 | Schema administration                                                                                         | Not an application identity                                                                   |
 
 The browser publishable key and authenticated user session are not Worker credentials. The dedicated Worker credential concept is independently rotatable and revocable and must remain outside frontend code, Git, snapshots, and logs. Milestone 1 tests fake claims only; it does not mint a production credential.
+
+The native terminal is reached only through an explicit local executable path. No password is accepted, `login()` is forbidden, and `initialize()` receives only the path. Raw account and server identifiers exist transiently during verification; persistence, incidents, logs, tests, and browser contracts receive only masks or one-way SHA-256 fingerprints.
 
 > Warning: the Supabase `service_role` must never be exposed to the browser and is not the Worker application design.
 
@@ -32,17 +34,18 @@ The browser publishable key and authenticated user session are not Worker creden
 
 Every application table in `public` has RLS enabled and forced. No policy means deny. `anon` has no table privileges, and an unauthenticated `auth.uid()` is null.
 
-| Resource                                                            | Authenticated owner read                                                                                              | Authenticated direct write                | Worker direct write                         |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `profiles`                                                          | Own                                                                                                                   | Safe display/locale/time-zone fields only | None                                        |
-| `trading_accounts`, `broker_symbols`, `trading_modes`               | Own                                                                                                                   | None                                      | None                                        |
-| `risk_policies`, `risk_policy_versions`                             | Own                                                                                                                   | None; request function only               | None                                        |
-| `market_snapshots`, `feature_snapshots`                             | Own                                                                                                                   | None                                      | None                                        |
-| `trade_proposals`, `risk_checks`, `trade_decisions`                 | Own                                                                                                                   | None; approval/rejection functions only   | None                                        |
-| `system_commands`, `system_command_events`                          | Own safe command projection and own events; command payload, lease token, and raw last error are not browser-readable | None; intent functions only               | None; Worker functions only                 |
-| `broker_orders`, `trade_executions`, `positions`, `position_events` | Own                                                                                                                   | None                                      | None in Milestone 1                         |
-| `system_components`, `system_heartbeats`, `system_incidents`        | Own                                                                                                                   | None                                      | None; narrowly scoped Worker functions only |
-| `audit_logs`                                                        | Own                                                                                                                   | None                                      | None; secured functions append records      |
+| Resource                                                            | Authenticated owner read                                                                                              | Authenticated direct write                | Worker direct write                                   |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------- |
+| `profiles`                                                          | Own                                                                                                                   | Safe display/locale/time-zone fields only | None                                                  |
+| `trading_accounts`, `broker_symbols`, `trading_modes`               | Own                                                                                                                   | None                                      | None                                                  |
+| `risk_policies`, `risk_policy_versions`                             | Own                                                                                                                   | None; request function only               | None                                                  |
+| `market_snapshots`, `feature_snapshots`                             | Own                                                                                                                   | None                                      | None                                                  |
+| `trade_proposals`, `risk_checks`, `trade_decisions`                 | Own                                                                                                                   | None; approval/rejection functions only   | None                                                  |
+| `system_commands`, `system_command_events`                          | Own safe command projection and own events; command payload, lease token, and raw last error are not browser-readable | None; intent functions only               | None; Worker functions only                           |
+| `broker_orders`, `trade_executions`, `positions`, `position_events` | Own                                                                                                                   | None                                      | Read through reconciliation RPC only; no direct write |
+| `system_components`, `system_heartbeats`, `system_incidents`        | Own                                                                                                                   | None                                      | None; narrowly scoped Worker functions only           |
+| `audit_logs`                                                        | Own                                                                                                                   | None                                      | None; secured functions append records                |
+| MT5 observation and reconciliation tables                           | Own sanitized rows only                                                                                               | None                                      | None; seven owner-derived Worker RPCs only            |
 
 Owner policies compare `owner_id` with `(select auth.uid())`. Child rows use owner-aware composite foreign keys so RLS cannot hide a cross-owner referential-integrity defect. Cross-owner and anonymous cases are part of the database test suite even though the initial product is single-user.
 
@@ -114,8 +117,8 @@ Audit metadata is bounded and rejects secret-shaped keys such as tokens, passwor
 - No command in the repository logs in, links a project, pushes a database, or accepts a remote project identifier.
 - No Supabase secret, Worker credential, MT5 credential, LINE secret, password, or production token belongs in source control.
 - `.env.example` contains names only. Browser configuration, if added later, may contain only public local values.
-- MT5 credentials must remain local to a future Windows Worker secret store and must never be stored in Supabase.
+- The Worker uses the already-open local Demo terminal session. It has no MT5 password setting or credential-reading path; no MT5 credential may be stored in Supabase.
 
 ## Defense responsibilities outside the database
 
-Database constraints enforce identity, ownership, version, lifecycle, Demo/XAUUSD, volume, Stop Loss, and immutable-policy ceilings. They do not pretend to evaluate live spread, stale market data, news windows, realized daily/weekly loss, drawdown, order margin, broker response, or Position reconciliation. Those checks belong to future explicitly authorized Risk Engine and read-only/Execution Worker milestones. Until those components exist, every operational outcome remains fail-closed and no command has a broker side effect.
+Database constraints enforce identity, ownership, version, lifecycle, Demo/XAUUSD, volume, Stop Loss, and immutable-policy ceilings. The read-only Worker verifies account/symbol/tick state and reconciles current Position/Order identities, but it does not evaluate strategy eligibility, news windows, realized loss, drawdown, order margin, or broker execution response. Those checks belong to future explicitly authorized milestones. Every operational outcome remains fail-closed and no command has a broker side effect.

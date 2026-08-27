@@ -1,8 +1,8 @@
-# Aurum Console Milestone 1 Architecture
+# Aurum Console Milestone 2 Architecture
 
 ## Scope and invariants
 
-This repository implements **Milestone 1 — Supabase Domain and Security Foundation** on top of the Bootstrap static P0 shell. The executable addition is a local control-plane database, authorization model, durable intent queue, and cross-language contracts. It is still not a trading or broker-execution system.
+This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. It observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
 
 The following invariants apply at every boundary:
 
@@ -20,7 +20,7 @@ The following invariants apply at every boundary:
 
 ```text
 apps/web                 Next.js App Router static P0 shell and read-only control-plane boundary
-apps/worker              Typed Python Worker scaffold; no MT5 or command consumer
+apps/worker              Typed Python Worker with fake and Windows-only MT5 read adapters; no command consumer
 packages/contracts       Hand-written Zod contracts plus generated Supabase database types
 contract-fixtures        One versioned TS/Python parity corpus
 fixtures                 Authoritative 20 presentation-only design scenarios
@@ -43,19 +43,20 @@ flowchart TB
     UI -->|validated owner intents only| UserRPC[Secured user functions]
     UserRPC --> Commands[(Durable system_commands)]
     Commands --> CommandEvents[(Append-only command events)]
-    FakeWorker[Fake local Worker claims] -->|claim / lease / transition| WorkerRPC[Worker-only functions]
+    ReadWorker[Read-only Windows Worker] -->|sanitized observation RPCs| WorkerRPC[Worker-only functions]
+    ReadWorker -->|allowed read calls only| DemoMT5[Already-open MT5 Demo terminal]
     WorkerRPC --> Commands
     UserRPC --> Audit[(Append-only audit logs)]
     WorkerRPC --> Audit
     Commands -. optional wake-up only .-> RT[Realtime disabled in Milestone 1]
-    Commands -.-x Broker[MT5 / broker]
+    Commands -.-x DemoMT5
 ```
 
 The crossed path is deliberate: a database command is control-plane intent, not approval by a Worker, broker confirmation, or execution. No process consumes commands to create a broker side effect in this milestone.
 
 ## Web boundary
 
-`apps/web` remains primarily a fixture-driven presentation layer. Its existing 20 scenarios can display proposal, order, Position, and emergency states for design verification, but do not write those states to Supabase and do not represent live connectivity.
+`apps/web` remains primarily a fixture-driven presentation layer and now has a bounded MT5 observation panel plus an owner-scoped Supabase read adapter for account, symbol, latest tick, reconciliation, mismatch, and safe health projections. Loading, empty, degraded, blocked, stale, reconnecting, pending, and failed states are explicit. No MT5 control or browser write capability exists.
 
 The web control-plane boundary is read-only by construction. Protected writes are not exposed by repository adapters. Authenticated actions, when a later UI connects them, must call the specific intent functions and receive durable command identifiers; browser code cannot insert, update, or delete operational rows. Public browser configuration may never include a Worker or Supabase secret.
 
@@ -71,11 +72,11 @@ Numeric PostgreSQL values are authoritative for financial precision. Browser ari
 
 ## Worker boundary
 
-`apps/worker` is still a typed Python scaffold with fake adapters. Milestone 1 adds Pydantic equivalents for durable commands, lifecycle metadata, Positions, risk checks, and risk-policy records, but it does not add a polling loop or operational Worker consumer.
+`apps/worker` owns an immutable typed read domain, a complete deterministic fake, and one lazy-import Windows native adapter. The native adapter serializes process-global terminal access and exposes only explicit read methods. Decimal values are constructed from native string representations; tickets cross boundaries as strings; all timestamps are UTC-aware.
 
 The database defines a dedicated NOLOGIN `aurum_worker` role for fake local claim tests and a future independently issued credential. Its JWT claim model includes an assigned owner and Worker identifier. It receives only secured Worker-function execution, never broad administrative authority and never a frontend session.
 
-No MetaTrader package is imported. The existing broker-read adapter remains fake and Bootstrap-limited. Read-only MT5 integration is Milestone 2 and has not started.
+The official `MetaTrader5==5.0.6090` dependency is optional and Windows/Python-3.13-only. Linux imports and gates work without it. Polling is cancellable, reconnect backoff is bounded, and every healthy transition requires Demo verification, a confirmed usable symbol, a fresh tick, and completed reconciliation. Reconciliation can report uncertainty but cannot create execution, close a Position, cancel an Order, or transition a command.
 
 ## Supabase boundary
 
@@ -92,6 +93,9 @@ Local Supabase is the Milestone 1 control plane and operational database:
 - audit and event tables reject application update/delete attempts;
 - secured functions use a NOLOGIN owner, pinned empty `search_path`, qualified references, narrow grants, and no dynamic SQL;
 - Realtime is disabled and never required for queue correctness.
+- five forced-RLS MT5 tables hold sanitized account/specification/latest-tick/reconciliation evidence;
+- seven additional Worker-only functions derive owner and Worker identity from claims, validate exact payloads, and write only those observations;
+- authenticated users may read only their own sanitized rows, while neither browser nor Worker receives direct observation DML.
 
 The local CLI is pinned in the lockfile. Docker port publication is verified as loopback-only, and start/status output that can contain local keys is suppressed. The queue concurrency check runs two overlapping, passwordless local `psql` sessions inside the disposable database container. Each session uses the pinned Supabase local role graph to assume the exact `aurum_worker` role without changing role membership; all claimed-row effects roll back and the original state is verified. A failed check destroys the isolated database volume. No remote project, link, push, credential, or production deployment is used.
 
@@ -105,11 +109,11 @@ The database can enforce Demo/XAUUSD identity, volume and Position ceilings, man
 
 The following remain deliberately absent:
 
-- MT5 initialization, account discovery, market/candle reads, or any broker write;
 - market ingestion, feature computation, strategy, deterministic live Risk Engine, and Shadow proposal production;
-- operational Worker polling and credential issuance;
-- LINE/LIFF approval, notification delivery, Conditional Auto, and reconciliation behavior;
+- hosted Worker credential issuance and service deployment;
+- LINE/LIFF approval, notification delivery, Conditional Auto, and post-execution reconciliation;
+- every broker write, execution result, Position mutation, and Order mutation;
 - Local Emergency Stop tray/CLI behavior;
 - P1 live analysis, AI/ML decisions, P2 analytics, cloud deployment, and all Live Trading capability.
 
-See `docs/IMPLEMENTATION_ROADMAP.md` for the authorized milestone order. Completing this foundation does not start Milestone 2.
+See `docs/IMPLEMENTATION_ROADMAP.md` for the authorized milestone order. Completing this milestone does not start Milestone 3.

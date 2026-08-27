@@ -1,12 +1,16 @@
-# Aurum Worker — Bootstrap scaffold
+# Aurum Worker — Milestone 2 read-only boundary
 
-This package is a typed, MT5-independent Worker foundation for the Bootstrap
-Milestone. It validates shared wire contracts and verifies the fixed Demo safety
-policy before a Worker may start in Shadow mode.
+This package contains the typed Demo-only Worker foundation plus deterministic
+fake and Windows-only native MT5 read adapters. The native package is an
+optional dependency; non-Windows development remains MT5-independent.
 
-The package intentionally exposes only broker reads and subsystem health
-boundaries. It contains no broker mutation, Position mutation, trading strategy,
-or order-execution capability.
+The package exposes only broker observations, sanitized persistence reporting,
+health, polling, and reconciliation. It contains no broker mutation, Position
+mutation, trading strategy, command consumer, or order-execution capability.
+
+Install with `pnpm worker:install`; on Windows, use
+`pnpm worker:install:mt5` to include the pinned official read boundary. See
+`docs/MT5_READ_ONLY.md` for configuration and the optional smoke command.
 
 ## Local checks
 

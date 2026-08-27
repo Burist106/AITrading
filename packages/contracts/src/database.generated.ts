@@ -332,6 +332,346 @@ export type Database = {
           },
         ];
       };
+      mt5_account_observations: {
+        Row: {
+          account_fingerprint: string;
+          adapter_version: string;
+          created_at: string;
+          currency: string | null;
+          id: string;
+          leverage: number | null;
+          masked_login: string;
+          masked_server: string;
+          observed_at: string;
+          owner_id: string;
+          schema_version: string;
+          server_fingerprint: string;
+          source: string;
+          trace_id: string;
+          trade_mode: string;
+          verification_state: string;
+          worker_id: string;
+        };
+        Insert: {
+          account_fingerprint: string;
+          adapter_version: string;
+          created_at?: string;
+          currency?: string | null;
+          id?: string;
+          leverage?: number | null;
+          masked_login: string;
+          masked_server: string;
+          observed_at: string;
+          owner_id: string;
+          schema_version: string;
+          server_fingerprint: string;
+          source: string;
+          trace_id: string;
+          trade_mode: string;
+          verification_state: string;
+          worker_id: string;
+        };
+        Update: {
+          account_fingerprint?: string;
+          adapter_version?: string;
+          created_at?: string;
+          currency?: string | null;
+          id?: string;
+          leverage?: number | null;
+          masked_login?: string;
+          masked_server?: string;
+          observed_at?: string;
+          owner_id?: string;
+          schema_version?: string;
+          server_fingerprint?: string;
+          source?: string;
+          trace_id?: string;
+          trade_mode?: string;
+          verification_state?: string;
+          worker_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mt5_account_observations_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mt5_latest_tick_observations: {
+        Row: {
+          account_fingerprint: string;
+          adapter_version: string;
+          age_seconds: number;
+          ask: number;
+          bid: number;
+          broker_symbol: string;
+          created_at: string;
+          freshness: string;
+          id: string;
+          observed_at: string;
+          owner_id: string;
+          schema_version: string;
+          source: string;
+          spread_points: number;
+          spread_price: number;
+          tick_at: string;
+          trace_id: string;
+          updated_at: string;
+          version: number;
+          worker_id: string;
+        };
+        Insert: {
+          account_fingerprint: string;
+          adapter_version: string;
+          age_seconds: number;
+          ask: number;
+          bid: number;
+          broker_symbol: string;
+          created_at?: string;
+          freshness: string;
+          id?: string;
+          observed_at: string;
+          owner_id: string;
+          schema_version: string;
+          source: string;
+          spread_points: number;
+          spread_price: number;
+          tick_at: string;
+          trace_id: string;
+          updated_at?: string;
+          version?: number;
+          worker_id: string;
+        };
+        Update: {
+          account_fingerprint?: string;
+          adapter_version?: string;
+          age_seconds?: number;
+          ask?: number;
+          bid?: number;
+          broker_symbol?: string;
+          created_at?: string;
+          freshness?: string;
+          id?: string;
+          observed_at?: string;
+          owner_id?: string;
+          schema_version?: string;
+          source?: string;
+          spread_points?: number;
+          spread_price?: number;
+          tick_at?: string;
+          trace_id?: string;
+          updated_at?: string;
+          version?: number;
+          worker_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mt5_latest_tick_observations_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mt5_reconciliation_mismatches: {
+        Row: {
+          category: string;
+          created_at: string;
+          id: string;
+          owner_id: string;
+          reason_code: string | null;
+          reconciliation_id: string;
+          resolution_state: string;
+          resource_reference: string;
+          resource_type: string;
+          severity: string;
+          worker_id: string;
+        };
+        Insert: {
+          category: string;
+          created_at?: string;
+          id?: string;
+          owner_id: string;
+          reason_code?: string | null;
+          reconciliation_id: string;
+          resolution_state?: string;
+          resource_reference: string;
+          resource_type: string;
+          severity: string;
+          worker_id: string;
+        };
+        Update: {
+          category?: string;
+          created_at?: string;
+          id?: string;
+          owner_id?: string;
+          reason_code?: string | null;
+          reconciliation_id?: string;
+          resolution_state?: string;
+          resource_reference?: string;
+          resource_type?: string;
+          severity?: string;
+          worker_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mt5_reconciliation_mismatches_reconciliation_id_owner_id_fkey";
+            columns: ["reconciliation_id", "owner_id"];
+            isOneToOne: false;
+            referencedRelation: "mt5_reconciliation_runs";
+            referencedColumns: ["id", "owner_id"];
+          },
+        ];
+      };
+      mt5_reconciliation_runs: {
+        Row: {
+          account_fingerprint: string | null;
+          active_order_count: number;
+          broker_symbol: string | null;
+          completed_at: string | null;
+          created_at: string;
+          deal_history_count: number;
+          id: string;
+          mismatch_count: number;
+          open_position_count: number;
+          order_history_count: number;
+          outcome: string | null;
+          owner_id: string;
+          reason_code: string;
+          report_hash: string;
+          server_fingerprint: string | null;
+          started_at: string;
+          status: string;
+          symbol_specification_fingerprint: string | null;
+          trace_id: string;
+          updated_at: string;
+          worker_id: string;
+        };
+        Insert: {
+          account_fingerprint?: string | null;
+          active_order_count?: number;
+          broker_symbol?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          deal_history_count?: number;
+          id: string;
+          mismatch_count?: number;
+          open_position_count?: number;
+          order_history_count?: number;
+          outcome?: string | null;
+          owner_id: string;
+          reason_code: string;
+          report_hash: string;
+          server_fingerprint?: string | null;
+          started_at: string;
+          status: string;
+          symbol_specification_fingerprint?: string | null;
+          trace_id: string;
+          updated_at?: string;
+          worker_id: string;
+        };
+        Update: {
+          account_fingerprint?: string | null;
+          active_order_count?: number;
+          broker_symbol?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          deal_history_count?: number;
+          id?: string;
+          mismatch_count?: number;
+          open_position_count?: number;
+          order_history_count?: number;
+          outcome?: string | null;
+          owner_id?: string;
+          reason_code?: string;
+          report_hash?: string;
+          server_fingerprint?: string | null;
+          started_at?: string;
+          status?: string;
+          symbol_specification_fingerprint?: string | null;
+          trace_id?: string;
+          updated_at?: string;
+          worker_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mt5_reconciliation_runs_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mt5_symbol_observations: {
+        Row: {
+          account_fingerprint: string;
+          adapter_version: string;
+          broker_symbol: string;
+          canonical_symbol: string;
+          created_at: string;
+          id: string;
+          normalized_specification: Json;
+          observed_at: string;
+          owner_id: string;
+          schema_version: string;
+          source: string;
+          specification_fingerprint: string;
+          trace_id: string;
+          unusable_reason: string | null;
+          usability_state: string;
+          worker_id: string;
+        };
+        Insert: {
+          account_fingerprint: string;
+          adapter_version: string;
+          broker_symbol: string;
+          canonical_symbol: string;
+          created_at?: string;
+          id?: string;
+          normalized_specification: Json;
+          observed_at: string;
+          owner_id: string;
+          schema_version: string;
+          source: string;
+          specification_fingerprint: string;
+          trace_id: string;
+          unusable_reason?: string | null;
+          usability_state: string;
+          worker_id: string;
+        };
+        Update: {
+          account_fingerprint?: string;
+          adapter_version?: string;
+          broker_symbol?: string;
+          canonical_symbol?: string;
+          created_at?: string;
+          id?: string;
+          normalized_specification?: Json;
+          observed_at?: string;
+          owner_id?: string;
+          schema_version?: string;
+          source?: string;
+          specification_fingerprint?: string;
+          trace_id?: string;
+          unusable_reason?: string | null;
+          usability_state?: string;
+          worker_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mt5_symbol_observations_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       position_events: {
         Row: {
           actor_id: string;
@@ -1741,6 +2081,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      worker_begin_reconciliation: { Args: { report: Json }; Returns: string };
       worker_claim_next_command: {
         Args: { lease_seconds?: number };
         Returns: Database["public"]["CompositeTypes"]["worker_claim_result"];
@@ -1765,6 +2106,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      worker_complete_reconciliation: {
+        Args: { report: Json };
+        Returns: string;
       };
       worker_fail_command: {
         Args: {
@@ -1804,6 +2149,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      worker_read_mt5_reconciliation_state: { Args: never; Returns: Json };
       worker_record_heartbeat: {
         Args: {
           component_code: string;
@@ -1830,6 +2176,18 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      worker_record_mt5_account_observation: {
+        Args: { observation: Json };
+        Returns: string;
+      };
+      worker_record_mt5_symbol_observation: {
+        Args: { observation: Json };
+        Returns: string;
+      };
+      worker_record_reconciliation_mismatch: {
+        Args: { mismatch: Json; reconciliation_id: string };
+        Returns: string;
       };
       worker_reject_command: {
         Args: {
@@ -1859,6 +2217,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      worker_upsert_mt5_latest_tick: {
+        Args: { observation: Json };
+        Returns: string;
       };
     };
     Enums: {

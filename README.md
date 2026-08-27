@@ -10,8 +10,8 @@ Aurum Console is a safety-first control-plane and Windows Worker foundation for 
 - Maximum permitted volume: **0.01**
 - Maximum open Positions: **1**
 - Future executable proposals require a Stop Loss
-- Completed: **Bootstrap and Milestone 1 — Supabase Domain and Security Foundation**
-- Active: **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation**
+- Completed: **Bootstrap, Milestone 1, and Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation**
+- Next authorized milestone: **Milestone 3 — Shadow Pipeline (not started)**
 
 Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch.
 
@@ -49,6 +49,14 @@ Install the reproducible JavaScript and Worker development dependencies:
 pnpm install --frozen-lockfile
 pnpm worker:install
 ```
+
+On Windows, install the official optional read-only boundary separately:
+
+```text
+pnpm worker:install:mt5
+```
+
+This pins `MetaTrader5==5.0.6090` for Python `3.13.7`. Normal Linux quality checks do not install it. The optional real-terminal smoke command is disabled unless every explicit local precondition is supplied; see [MT5 read-only runbook](docs/MT5_READ_ONLY.md).
 
 Do not add credentials to the repository. Copy variable names from `.env.example` only when local configuration is needed, keep values outside version control, and never configure an MT5 password. The Worker may inspect the account identifier/server returned by the already-open terminal only transiently to verify a masked/hashed binding; raw identifiers never belong in logs, Supabase, browser output, snapshots, prompts, or commits.
 
@@ -104,5 +112,6 @@ pnpm db:stop
 - [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
 - [P0 acceptance gates](docs/P0_ACCEPTANCE_GATES.md)
 - [Database foundation](docs/DATABASE_FOUNDATION.md)
+- [MT5 read-only Worker and smoke runbook](docs/MT5_READ_ONLY.md)
 
 The repository remains strictly `DEMO_ONLY`; changing that rule requires a separate future project, not a configuration change.

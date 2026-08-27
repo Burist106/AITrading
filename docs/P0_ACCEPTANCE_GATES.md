@@ -2,7 +2,7 @@
 
 These gates apply before any Demo broker execution is introduced.
 
-`[x]` means verified in the current Bootstrap/Milestone 1 workspace. `[ ]` means deliberately pending. GitHub Actions completed the clean-checkout quality and database jobs successfully for published implementation commit `ab7df47`; this does not authorize execution.
+`[x]` means verified in the current Bootstrap through Milestone 2 workspace. `[ ]` means deliberately pending. Milestone 2 adds read-only observation and reconciliation only; this does not authorize execution.
 
 ## Repository and quality
 
@@ -57,7 +57,8 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Local Emergency Stop is included in the Worker design
 - [x] Resume requires reconciliation and a safety checklist
 - [x] Open positions are not silently assumed closed
-- [ ] Worker restart and reconnect reconciliation are designed and tested before execution
+- [x] Worker restart and reconnect reconciliation are designed and tested before execution
+- [x] Reconciliation detects account, server, specification, Position, Order, history-window, clock, and uncertain-execution mismatches without operational mutation
 
 ## Broker execution authorization gate
 

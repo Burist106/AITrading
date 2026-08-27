@@ -203,6 +203,115 @@ function expectOwnerScope(queries: readonly RecordedQuery[]): void {
 }
 
 describe("owner-scoped control-plane reads", () => {
+  it("maps owner-scoped sanitized MT5 observations without privileged fields", async () => {
+    const account: ControlPlaneReadRowMap["mt5_account_observations"] = {
+      id: "00000000-0000-4000-8000-000000000051",
+      owner_id: OWNER_ID,
+      worker_id: "worker-fixture",
+      account_fingerprint: "mt5-account-v1:fixture",
+      server_fingerprint: "mt5-server-v1:fixture",
+      masked_login: "••••3456",
+      masked_server: "demo…a91f",
+      trade_mode: "demo",
+      verification_state: "verified_demo_bound",
+      currency: "USD",
+      leverage: 100,
+      observed_at: NOW,
+      source: "fake_mt5",
+      adapter_version: "fake-v1",
+      trace_id: "trace-mt5",
+      schema_version: "1",
+      created_at: NOW,
+    };
+    const symbol: ControlPlaneReadRowMap["mt5_symbol_observations"] = {
+      id: "00000000-0000-4000-8000-000000000052",
+      owner_id: OWNER_ID,
+      worker_id: "worker-fixture",
+      account_fingerprint: "mt5-account-v1:fixture",
+      canonical_symbol: "XAUUSD",
+      broker_symbol: "XAUUSD",
+      specification_fingerprint: "mt5-spec-v1:fixture",
+      normalized_specification: {
+        point: "0.01",
+        tick_size: "0.01",
+        contract_size: "100",
+        minimum_volume: "0.01",
+        maximum_volume: "100",
+        volume_step: "0.01",
+      },
+      usability_state: "usable",
+      unusable_reason: null,
+      observed_at: NOW,
+      source: "fake_mt5",
+      adapter_version: "fake-v1",
+      trace_id: "trace-mt5",
+      schema_version: "1",
+      created_at: NOW,
+    };
+    const tick: ControlPlaneReadRowMap["mt5_latest_tick_observations"] = {
+      id: "00000000-0000-4000-8000-000000000053",
+      owner_id: OWNER_ID,
+      worker_id: "worker-fixture",
+      account_fingerprint: "mt5-account-v1:fixture",
+      broker_symbol: "XAUUSD",
+      bid: 2345.1,
+      ask: 2345.3,
+      spread_price: 0.2,
+      spread_points: 20,
+      tick_at: NOW,
+      observed_at: NOW,
+      age_seconds: 1,
+      freshness: "live",
+      source: "fake_mt5",
+      adapter_version: "fake-v1",
+      trace_id: "trace-mt5",
+      schema_version: "1",
+      version: 1,
+      created_at: NOW,
+      updated_at: NOW,
+    };
+    const reconciliation: ControlPlaneReadRowMap["mt5_reconciliation_runs"] = {
+      id: "00000000-0000-4000-8000-000000000054",
+      owner_id: OWNER_ID,
+      worker_id: "worker-fixture",
+      status: "completed",
+      outcome: "matched",
+      reason_code: "HEALTHY",
+      account_fingerprint: "mt5-account-v1:fixture",
+      server_fingerprint: "mt5-server-v1:fixture",
+      broker_symbol: "XAUUSD",
+      symbol_specification_fingerprint: "mt5-spec-v1:fixture",
+      open_position_count: 0,
+      active_order_count: 0,
+      order_history_count: 0,
+      deal_history_count: 0,
+      mismatch_count: 0,
+      report_hash: "a".repeat(32),
+      trace_id: "trace-mt5",
+      started_at: NOW,
+      completed_at: NOW,
+      created_at: NOW,
+      updated_at: NOW,
+    };
+    const gateway = new RecordingReadGateway({
+      mt5_account_observations: success(account),
+      mt5_symbol_observations: success(symbol),
+      mt5_latest_tick_observations: success(tick),
+      mt5_reconciliation_runs: success(reconciliation),
+    });
+    const adapter = new OwnerScopedControlPlaneReadAdapter(OWNER_ID, gateway);
+
+    const model = await adapter.getMt5Console();
+
+    expect(model.health.state).toBe("healthy");
+    expect(model.account?.maskedLogin).toBe("••••3456");
+    expect(model.tick?.bid).toBe("2345.1");
+    expect(model).not.toHaveProperty("worker_id");
+    expect(model).not.toHaveProperty("report_hash");
+    expectOwnerScope(gateway.queries);
+    expect(gateway.queries).toHaveLength(5);
+  });
+
   it("maps snake_case proposal and risk evidence without fabricating a full proposal", async () => {
     const gateway = new RecordingReadGateway(
       { trade_proposals: success(proposalRow) },
@@ -500,6 +609,7 @@ describe("owner-scoped control-plane reads", () => {
         "constructor",
         "getCommandProgress",
         "getHealthSnapshot",
+        "getMt5Console",
         "getPosition",
         "getProposal",
       ].sort(),

@@ -14,6 +14,7 @@ const TYPESCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 const FORBIDDEN_CALLS = new Set([
   "login",
   "market_book_add",
+  "market_book_get",
   "market_book_release",
   "order_calc_margin",
   "order_calc_profit",
@@ -93,7 +94,10 @@ export function scanTypeScriptSource(source, reference) {
         : ts.isIdentifier(expression)
           ? expression.text
           : undefined;
-      if (name && FORBIDDEN_CALLS.has(name)) {
+      if (
+        name &&
+        (FORBIDDEN_CALLS.has(name) || name.startsWith("market_book_"))
+      ) {
         report(node, `forbidden broker/runtime call: ${name}`);
       }
       if (name === "getattr" || name === "__getattribute__") {

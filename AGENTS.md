@@ -95,6 +95,8 @@ Use current stable supported versions and lock dependencies. Document exact vers
 - No execution method before its authorized milestone.
 - Local safety state and reconciliation must be designed before Demo execution.
 - Tests must use fakes/adapters; CI must not require a running MT5 terminal.
+- Milestone 2 native access is Windows-only, serialized, uses an explicit local terminal path, and may call only `initialize`, `shutdown`, `version`, `last_error`, `terminal_info`, `account_info`, `symbols_get`, `symbol_info`, `symbol_info_tick`, `copy_rates_from_pos`, `copy_rates_range`, `positions_get`, `orders_get`, `history_orders_get`, and `history_deals_get`.
+- `order_send`, `order_check`, `order_calc_profit`, `order_calc_margin`, `login`, `symbol_select`, and every `market_book_*` call remain forbidden. Do not use dynamic dispatch to bypass this boundary.
 
 ## Database requirements
 

@@ -49,6 +49,7 @@ const pgTapTestPaths = [
   "supabase/tests/004_user_actions.test.sql",
   "supabase/tests/005_queue_lifecycle.test.sql",
   "supabase/tests/006_audit_immutability.test.sql",
+  "supabase/tests/007_mt5_read_observations.test.sql",
 ];
 const concurrentClaimTestDirectory = resolve(
   projectRoot,
