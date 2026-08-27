@@ -1,0 +1,8 @@
+-- Aurum Console Bootstrap Milestone migration placeholder.
+--
+-- This file intentionally contains no executable SQL. It establishes the
+-- timestamped migration workflow without inventing operational tables, RLS
+-- policies, grants, functions, or browser write permissions before Milestone 1.
+--
+-- Environment remains DEMO ONLY and the initial runtime mode remains SHADOW.
+-- Operational schema work requires the Milestone 1 security design and tests.

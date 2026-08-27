@@ -1,0 +1,28 @@
+{
+  "name": "@aurum/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aurum/contracts": "workspace:*",
+    "@aurum/fixtures": "workspace:*",
+    "@fontsource/archivo": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans-thai": "5.3.0",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "postcss": "8.5.26",
+    "tailwindcss": "4.3.3"
+  }
+}

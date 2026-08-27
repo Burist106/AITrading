@@ -1,0 +1,704 @@
+{
+  "schemaVersion": 1,
+  "domainSets": {
+    "commandTypes": [
+      "APPROVE_PROPOSAL",
+      "REJECT_PROPOSAL",
+      "PAUSE_NEW_TRADES",
+      "RESUME_SYSTEM",
+      "ACTIVATE_EMERGENCY_STOP",
+      "REQUEST_POSITION_CLOSE",
+      "REQUEST_STOP_LOSS_CHANGE",
+      "REQUEST_TAKE_PROFIT_CHANGE",
+      "REQUEST_RISK_POLICY_CHANGE"
+    ],
+    "commandStatuses": [
+      "pending",
+      "claimed",
+      "validating",
+      "executing",
+      "succeeded",
+      "rejected",
+      "failed",
+      "expired",
+      "cancelled"
+    ],
+    "commandTargetResourceTypes": ["trade_proposal", "position", "risk_policy"],
+    "tradeProposalStatuses": [
+      "candidate",
+      "validated",
+      "pending_approval",
+      "approved",
+      "rejected",
+      "blocked",
+      "expired",
+      "execution_pending",
+      "executed",
+      "failed"
+    ],
+    "positionStatuses": [
+      "open",
+      "close_requested",
+      "closing",
+      "closed",
+      "mismatch"
+    ],
+    "riskCheckStates": ["pass", "warn", "fail", "na"],
+    "riskPolicyNumericRuleKeys": [
+      "risk_per_trade_pct",
+      "daily_loss_limit_pct",
+      "weekly_loss_limit_pct",
+      "maximum_drawdown_pct",
+      "maximum_trades_per_day",
+      "minimum_risk_reward",
+      "stale_data_max_age_seconds",
+      "maximum_spread_points",
+      "news_blackout_minutes"
+    ],
+    "riskPolicyActorTypes": ["user", "worker", "system"],
+    "systemHealthStates": [
+      "healthy",
+      "degraded",
+      "warning",
+      "failed",
+      "unknown"
+    ],
+    "systemPlanes": ["control_plane", "execution_plane"],
+    "emergencyStopControlPlaneStates": [
+      "REQUESTED",
+      "CONTROL_PLANE_RECORDED",
+      "CONTROL_PLANE_UNAVAILABLE"
+    ],
+    "emergencyStopWorkerStates": [
+      "WORKER_RECEIVED",
+      "LOCAL_EXECUTION_DISABLED",
+      "CONFIRMED",
+      "WORKER_NOT_REACHABLE",
+      "WORKER_ACK_TIMEOUT",
+      "LOCAL_STATE_UNCONFIRMED",
+      "FAILED"
+    ]
+  },
+  "validPayloads": [
+    {
+      "caseId": "approve-proposal",
+      "type": "APPROVE_PROPOSAL",
+      "payload": {
+        "proposalId": "00000000-0000-4000-8000-000000000101",
+        "proposalVersion": 3,
+        "approvalSessionId": "00000000-0000-4000-8000-000000001201"
+      }
+    },
+    {
+      "caseId": "reject-proposal",
+      "type": "REJECT_PROPOSAL",
+      "payload": {
+        "proposalId": "00000000-0000-4000-8000-000000000101",
+        "proposalVersion": 3,
+        "reason": "Contract parity fixture rejection"
+      }
+    },
+    {
+      "caseId": "pause-new-trades",
+      "type": "PAUSE_NEW_TRADES",
+      "payload": {}
+    },
+    {
+      "caseId": "resume-system",
+      "type": "RESUME_SYSTEM",
+      "payload": {
+        "checklistAcknowledgementId": "00000000-0000-4000-8000-000000001101"
+      }
+    },
+    {
+      "caseId": "activate-emergency-stop",
+      "type": "ACTIVATE_EMERGENCY_STOP",
+      "payload": { "reason": "Contract parity safety fixture" }
+    },
+    {
+      "caseId": "request-position-close",
+      "type": "REQUEST_POSITION_CLOSE",
+      "payload": {
+        "positionId": "00000000-0000-4000-8000-000000000901",
+        "expectedPositionVersion": 2,
+        "reason": "Contract parity close fixture"
+      }
+    },
+    {
+      "caseId": "request-stop-loss-change",
+      "type": "REQUEST_STOP_LOSS_CHANGE",
+      "payload": {
+        "positionId": "00000000-0000-4000-8000-000000000901",
+        "expectedPositionVersion": 2,
+        "newStopLoss": 2405.1
+      }
+    },
+    {
+      "caseId": "request-take-profit-change",
+      "type": "REQUEST_TAKE_PROFIT_CHANGE",
+      "payload": {
+        "positionId": "00000000-0000-4000-8000-000000000901",
+        "expectedPositionVersion": 2,
+        "newTakeProfit": 2422.2
+      }
+    },
+    {
+      "caseId": "request-risk-policy-change",
+      "type": "REQUEST_RISK_POLICY_CHANGE",
+      "payload": {
+        "ruleKey": "maximum_spread_points",
+        "newValue": 0,
+        "reason": "Fail-closed contract parity fixture"
+      }
+    }
+  ],
+  "invalidPayloads": [
+    {
+      "caseId": "approve-zero-version",
+      "type": "APPROVE_PROPOSAL",
+      "payload": {
+        "proposalId": "00000000-0000-4000-8000-000000000101",
+        "proposalVersion": 0
+      }
+    },
+    {
+      "caseId": "reject-empty-reason",
+      "type": "REJECT_PROPOSAL",
+      "payload": {
+        "proposalId": "00000000-0000-4000-8000-000000000101",
+        "proposalVersion": 3,
+        "reason": ""
+      }
+    },
+    {
+      "caseId": "pause-explicit-null",
+      "type": "PAUSE_NEW_TRADES",
+      "payload": { "reason": null }
+    },
+    {
+      "caseId": "resume-invalid-uuid",
+      "type": "RESUME_SYSTEM",
+      "payload": { "checklistAcknowledgementId": "not-a-uuid" }
+    },
+    {
+      "caseId": "emergency-missing-reason",
+      "type": "ACTIVATE_EMERGENCY_STOP",
+      "payload": {}
+    },
+    {
+      "caseId": "position-close-zero-version",
+      "type": "REQUEST_POSITION_CLOSE",
+      "payload": {
+        "positionId": "00000000-0000-4000-8000-000000000901",
+        "expectedPositionVersion": 0,
+        "reason": "Invalid version fixture"
+      }
+    },
+    {
+      "caseId": "stop-loss-nonpositive",
+      "type": "REQUEST_STOP_LOSS_CHANGE",
+      "payload": {
+        "positionId": "00000000-0000-4000-8000-000000000901",
+        "expectedPositionVersion": 2,
+        "newStopLoss": 0
+      }
+    },
+    {
+      "caseId": "take-profit-extra-field",
+      "type": "REQUEST_TAKE_PROFIT_CHANGE",
+      "payload": {
+        "positionId": "00000000-0000-4000-8000-000000000901",
+        "expectedPositionVersion": 2,
+        "newTakeProfit": 2422.2,
+        "brokerWrite": true
+      }
+    },
+    {
+      "caseId": "risk-policy-unknown-rule",
+      "type": "REQUEST_RISK_POLICY_CHANGE",
+      "payload": {
+        "ruleKey": "allow_live_trading",
+        "newValue": 1,
+        "reason": "Forbidden rule fixture"
+      }
+    }
+  ],
+  "validRiskPolicyRuleChanges": [
+    { "ruleKey": "risk_per_trade_pct", "newValue": 0.25 },
+    { "ruleKey": "daily_loss_limit_pct", "newValue": 1 },
+    { "ruleKey": "weekly_loss_limit_pct", "newValue": 3 },
+    { "ruleKey": "maximum_drawdown_pct", "newValue": 5 },
+    { "ruleKey": "maximum_trades_per_day", "newValue": 3 },
+    { "ruleKey": "minimum_risk_reward", "newValue": 1.5 },
+    { "ruleKey": "minimum_risk_reward", "newValue": 9999.9999 },
+    { "ruleKey": "stale_data_max_age_seconds", "newValue": 10 },
+    { "ruleKey": "maximum_spread_points", "newValue": 3.5 },
+    { "ruleKey": "news_blackout_minutes", "newValue": 15 },
+    { "ruleKey": "news_blackout_minutes", "newValue": 1441 }
+  ],
+  "invalidRiskPolicyRuleChanges": [
+    { "ruleKey": "risk_per_trade_pct", "newValue": 0.2501 },
+    { "ruleKey": "daily_loss_limit_pct", "newValue": 1.01 },
+    { "ruleKey": "weekly_loss_limit_pct", "newValue": 3.01 },
+    { "ruleKey": "maximum_drawdown_pct", "newValue": 5.01 },
+    { "ruleKey": "maximum_trades_per_day", "newValue": 2.5 },
+    { "ruleKey": "minimum_risk_reward", "newValue": 1.49 },
+    { "ruleKey": "minimum_risk_reward", "newValue": 10000 },
+    { "ruleKey": "stale_data_max_age_seconds", "newValue": 10.5 },
+    { "ruleKey": "maximum_spread_points", "newValue": 3.51 },
+    { "ruleKey": "news_blackout_minutes", "newValue": 14 },
+    { "ruleKey": "news_blackout_minutes", "newValue": 2147483648 }
+  ],
+  "envelopeDefaults": {
+    "ownerId": "00000000-0000-4000-8000-000000000201",
+    "payloadSchemaVersion": 1,
+    "priority": 0,
+    "maximumAttempts": 3,
+    "commandVersion": 1,
+    "eventSequence": 0,
+    "createdAt": "2026-08-26T08:00:00.000Z",
+    "updatedAt": "2026-08-26T08:10:00.000Z"
+  },
+  "validEnvelopes": [
+    {
+      "caseId": "pending",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001001",
+        "type": "APPROVE_PROPOSAL",
+        "payload": {
+          "proposalId": "00000000-0000-4000-8000-000000000101",
+          "proposalVersion": 3
+        },
+        "status": "pending",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "targetResourceType": "trade_proposal",
+        "targetResourceId": "00000000-0000-4000-8000-000000000101",
+        "expectedResourceVersion": 3,
+        "idempotencyKey": "parity-pending-1",
+        "attemptCount": 0,
+        "expiresAt": "2026-08-26T08:10:00.000Z"
+      }
+    },
+    {
+      "caseId": "claimed",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001002",
+        "type": "REJECT_PROPOSAL",
+        "payload": {
+          "proposalId": "00000000-0000-4000-8000-000000000101",
+          "proposalVersion": 3,
+          "reason": "Claimed parity fixture"
+        },
+        "status": "claimed",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "targetResourceType": "trade_proposal",
+        "targetResourceId": "00000000-0000-4000-8000-000000000101",
+        "expectedResourceVersion": 3,
+        "idempotencyKey": "parity-claimed-1",
+        "claimedAt": "2026-08-26T08:01:00.000Z",
+        "claimedBy": "00000000-0000-4000-8000-000000000801",
+        "leaseToken": "00000000-0000-4000-8000-000000002002",
+        "leaseExpiresAt": "2026-08-26T08:03:00.000Z",
+        "attemptCount": 1,
+        "expiresAt": "2026-08-26T08:10:00.000Z"
+      }
+    },
+    {
+      "caseId": "validating",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001003",
+        "type": "REQUEST_POSITION_CLOSE",
+        "payload": {
+          "positionId": "00000000-0000-4000-8000-000000000901",
+          "expectedPositionVersion": 2,
+          "reason": "Validating parity fixture"
+        },
+        "status": "validating",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "targetResourceType": "position",
+        "targetResourceId": "00000000-0000-4000-8000-000000000901",
+        "expectedResourceVersion": 2,
+        "idempotencyKey": "parity-validating-1",
+        "claimedAt": "2026-08-26T08:01:00.000Z",
+        "claimedBy": "00000000-0000-4000-8000-000000000801",
+        "leaseToken": "00000000-0000-4000-8000-000000002003",
+        "leaseExpiresAt": "2026-08-26T08:03:00.000Z",
+        "attemptCount": 1,
+        "expiresAt": "2026-08-26T08:10:00.000Z"
+      }
+    },
+    {
+      "caseId": "executing",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001004",
+        "type": "REQUEST_STOP_LOSS_CHANGE",
+        "payload": {
+          "positionId": "00000000-0000-4000-8000-000000000901",
+          "expectedPositionVersion": 2,
+          "newStopLoss": 2405.1
+        },
+        "status": "executing",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "targetResourceType": "position",
+        "targetResourceId": "00000000-0000-4000-8000-000000000901",
+        "expectedResourceVersion": 2,
+        "idempotencyKey": "parity-executing-1",
+        "claimedAt": "2026-08-26T08:01:00.000Z",
+        "claimedBy": "00000000-0000-4000-8000-000000000801",
+        "leaseToken": "00000000-0000-4000-8000-000000002004",
+        "leaseExpiresAt": "2026-08-26T08:03:00.000Z",
+        "attemptCount": 1,
+        "expiresAt": "2026-08-26T08:10:00.000Z"
+      }
+    },
+    {
+      "caseId": "succeeded",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001005",
+        "type": "REQUEST_TAKE_PROFIT_CHANGE",
+        "payload": {
+          "positionId": "00000000-0000-4000-8000-000000000901",
+          "expectedPositionVersion": 2,
+          "newTakeProfit": 2422.2
+        },
+        "status": "succeeded",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "targetResourceType": "position",
+        "targetResourceId": "00000000-0000-4000-8000-000000000901",
+        "expectedResourceVersion": 2,
+        "idempotencyKey": "parity-succeeded-1",
+        "attemptCount": 1,
+        "expiresAt": "2026-08-26T08:10:00.000Z",
+        "completedAt": "2026-08-26T08:02:00.000Z",
+        "resultCode": "RECORDED_ONLY",
+        "resultMessage": "No broker side effect"
+      }
+    },
+    {
+      "caseId": "rejected",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001006",
+        "type": "REQUEST_RISK_POLICY_CHANGE",
+        "payload": {
+          "ruleKey": "maximum_spread_points",
+          "newValue": 0,
+          "reason": "Rejected parity fixture"
+        },
+        "status": "rejected",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "targetResourceType": "risk_policy",
+        "targetResourceId": "00000000-0000-4000-8000-000000000a01",
+        "expectedResourceVersion": 1,
+        "idempotencyKey": "parity-rejected-1",
+        "attemptCount": 1,
+        "expiresAt": "2026-08-26T08:10:00.000Z",
+        "completedAt": "2026-08-26T08:02:00.000Z",
+        "resultCode": "POLICY_CHANGE_REJECTED"
+      }
+    },
+    {
+      "caseId": "failed",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001007",
+        "type": "RESUME_SYSTEM",
+        "payload": {
+          "checklistAcknowledgementId": "00000000-0000-4000-8000-000000001101"
+        },
+        "status": "failed",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "idempotencyKey": "parity-failed-1",
+        "attemptCount": 1,
+        "expiresAt": "2026-08-26T08:10:00.000Z",
+        "completedAt": "2026-08-26T08:02:00.000Z",
+        "resultCode": "CHECKLIST_FAILED",
+        "lastError": "Safe fixture error"
+      }
+    },
+    {
+      "caseId": "expired",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001008",
+        "type": "PAUSE_NEW_TRADES",
+        "payload": {},
+        "status": "expired",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "idempotencyKey": "parity-expired-1",
+        "attemptCount": 0,
+        "expiresAt": "2026-08-26T08:10:00.000Z",
+        "completedAt": "2026-08-26T08:10:00.000Z",
+        "resultCode": "COMMAND_EXPIRED"
+      }
+    },
+    {
+      "caseId": "cancelled",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000001009",
+        "type": "ACTIVATE_EMERGENCY_STOP",
+        "payload": { "reason": "Cancelled parity fixture" },
+        "status": "cancelled",
+        "requestedBy": "00000000-0000-4000-8000-000000000201",
+        "requestedAt": "2026-08-26T08:00:00.000Z",
+        "idempotencyKey": "parity-cancelled-1",
+        "priority": 100,
+        "attemptCount": 0,
+        "expiresAt": "2026-08-26T08:10:00.000Z",
+        "completedAt": "2026-08-26T08:02:00.000Z",
+        "resultCode": "REQUEST_CANCELLED"
+      }
+    }
+  ],
+  "unsafeResultCodes": [
+    {
+      "parts": ["AKIA", "1234567890ABCDEF"],
+      "separator": ""
+    },
+    {
+      "parts": ["SB", "SECRET", "FIXTURE_RESULT_CODE"],
+      "separator": "_"
+    }
+  ],
+  "invalidEnvelopes": [
+    {
+      "caseId": "expiry-not-after-request",
+      "patchValidCase": "pending",
+      "patch": { "expiresAt": "2026-08-26T08:00:00.000Z" }
+    },
+    {
+      "caseId": "active-missing-lease",
+      "patchValidCase": "claimed",
+      "remove": ["leaseExpiresAt"]
+    },
+    {
+      "caseId": "lease-exceeds-command-expiry",
+      "patchValidCase": "claimed",
+      "patch": { "leaseExpiresAt": "2026-08-26T08:10:01.000Z" }
+    },
+    {
+      "caseId": "pending-carries-claim",
+      "patchValidCase": "pending",
+      "patch": {
+        "claimedAt": "2026-08-26T08:01:00.000Z",
+        "claimedBy": "00000000-0000-4000-8000-000000000801",
+        "leaseExpiresAt": "2026-08-26T08:03:00.000Z"
+      }
+    },
+    {
+      "caseId": "terminal-missing-completion",
+      "patchValidCase": "succeeded",
+      "remove": ["completedAt"]
+    },
+    {
+      "caseId": "nonterminal-has-completion",
+      "patchValidCase": "pending",
+      "patch": { "completedAt": "2026-08-26T08:02:00.000Z" }
+    },
+    {
+      "caseId": "proposal-target-id-mismatch",
+      "patchValidCase": "pending",
+      "patch": {
+        "targetResourceId": "00000000-0000-4000-8000-000000000102"
+      }
+    },
+    {
+      "caseId": "global-command-has-target",
+      "patchValidCase": "expired",
+      "patch": {
+        "targetResourceType": "position",
+        "targetResourceId": "00000000-0000-4000-8000-000000000901",
+        "expectedResourceVersion": 2
+      }
+    },
+    {
+      "caseId": "active-attempt-zero",
+      "patchValidCase": "claimed",
+      "patch": { "attemptCount": 0 }
+    },
+    {
+      "caseId": "retry-on-active-command",
+      "patchValidCase": "claimed",
+      "patch": { "nextRetryAt": "2026-08-26T08:04:00.000Z" }
+    },
+    {
+      "caseId": "empty-idempotency-key",
+      "patchValidCase": "pending",
+      "patch": { "idempotencyKey": "" }
+    },
+    {
+      "caseId": "explicit-null-claim",
+      "patchValidCase": "pending",
+      "patch": { "claimedAt": null }
+    },
+    {
+      "caseId": "unsafe-result-message",
+      "patchValidCase": "succeeded",
+      "patch": { "resultMessage": "authorization: unsafe fixture" }
+    },
+    {
+      "caseId": "unsafe-credential-uri-result-message",
+      "patchValidCase": "succeeded",
+      "patch": {
+        "resultMessage": "postgresql://fixture-user:fixture-pass@localhost/db"
+      }
+    },
+    {
+      "caseId": "invalid-result-code-format",
+      "patchValidCase": "succeeded",
+      "patch": { "resultCode": "lowercase-code" }
+    }
+  ],
+  "domainRecords": {
+    "riskCheck": {
+      "key": "demo_account",
+      "labelTh": "ยืนยันบัญชี Demo",
+      "labelEn": "Demo account verified",
+      "state": "pass",
+      "actual": "verified_demo",
+      "hard": true
+    },
+    "persistedRiskCheck": {
+      "id": "00000000-0000-4000-8000-000000000c01",
+      "ownerId": "00000000-0000-4000-8000-000000000201",
+      "tradeProposalId": "00000000-0000-4000-8000-000000000101",
+      "proposalVersion": 3,
+      "key": "maximum_spread",
+      "labelTh": "สเปรดไม่เกินเพดาน",
+      "labelEn": "Spread within limit",
+      "state": "warn",
+      "actual": "3.20 points",
+      "limitValue": "3.50 points",
+      "explanation": null,
+      "hard": true,
+      "ordinal": 4,
+      "createdAt": "2026-08-26T08:00:00.000Z"
+    },
+    "position": {
+      "id": "00000000-0000-4000-8000-000000000901",
+      "positionVersion": 2,
+      "userId": "00000000-0000-4000-8000-000000000201",
+      "tradingAccountId": "00000000-0000-4000-8000-000000000301",
+      "accountType": "demo",
+      "canonicalSymbol": "XAUUSD",
+      "direction": "BUY",
+      "volume": 0.01,
+      "entry": 2405.85,
+      "current": 2410.55,
+      "stopLoss": 2400.35,
+      "takeProfit": 2417.2,
+      "unrealizedPnl": 4.7,
+      "rMultiple": 0.85,
+      "status": "open",
+      "openedAt": "2026-08-26T07:08:00.000Z",
+      "updatedAt": "2026-08-26T08:22:31.000Z",
+      "closedAt": null
+    },
+    "persistedPosition": {
+      "id": "00000000-0000-4000-8000-000000000901",
+      "ownerId": "00000000-0000-4000-8000-000000000201",
+      "tradingAccountId": "00000000-0000-4000-8000-000000000301",
+      "tradeProposalId": "00000000-0000-4000-8000-000000000101",
+      "brokerOrderId": "00000000-0000-4000-8000-000000000d01",
+      "brokerPositionReference": "DEMO-POSITION-FIXTURE",
+      "positionVersion": 2,
+      "direction": "BUY",
+      "volume": 0.01,
+      "entryPrice": 2405.85,
+      "currentPrice": 2410.55,
+      "stopLossPrice": 2400.35,
+      "takeProfitPrice": 2417.2,
+      "unrealizedPnl": 4.7,
+      "rMultiple": 0.85,
+      "status": "open",
+      "openedAt": "2026-08-26T07:08:00.000Z",
+      "closedAt": null,
+      "createdAt": "2026-08-26T07:08:00.000Z",
+      "updatedAt": "2026-08-26T08:22:31.000Z"
+    },
+    "persistedTradeProposal": {
+      "id": "00000000-0000-4000-8000-000000000101",
+      "ownerId": "00000000-0000-4000-8000-000000000201",
+      "proposalVersion": 3,
+      "tradingAccountId": "00000000-0000-4000-8000-000000000301",
+      "brokerSymbolId": "00000000-0000-4000-8000-000000000e01",
+      "riskPolicyVersionId": "00000000-0000-4000-8000-000000000a01",
+      "accountType": "demo",
+      "accountCurrency": "USD",
+      "brokerServer": "AURUM-DEMO-SERVER",
+      "canonicalSymbol": "XAUUSD",
+      "brokerSymbol": "XAUUSD.demo",
+      "symbolSpecificationVersion": "demo-xauusd-v1",
+      "direction": "BUY",
+      "strategyCode": "demo-breakout",
+      "strategyVersion": "demo-breakout-v1",
+      "modelVersion": null,
+      "eligibilityPolicyId": "demo-eligibility-policy",
+      "eligibilityPolicyVersion": "demo-eligibility-v1",
+      "eligibilityOutcome": "ask",
+      "eligibilityEvaluatedAt": "2026-08-26T08:00:00.000Z",
+      "riskPolicyVersion": "demo-risk-policy-v1",
+      "entryPrice": 2405.85,
+      "stopLossPrice": 2400.35,
+      "takeProfitPrice": 2417.2,
+      "calculatedVolume": 0.01,
+      "requestedVolume": 0.01,
+      "approvedVolume": null,
+      "maximumPermittedVolume": 0.01,
+      "riskAmount": 5.5,
+      "riskPct": 0.25,
+      "riskReward": 2.06,
+      "marketSnapshotId": "00000000-0000-4000-8000-000000000401",
+      "featureSnapshotId": "00000000-0000-4000-8000-000000000501",
+      "decisionTraceId": "00000000-0000-4000-8000-000000000601",
+      "status": "pending_approval",
+      "createdAt": "2026-08-26T08:00:00.000Z",
+      "expiresAt": "2026-08-26T08:00:30.000Z",
+      "processedAt": null,
+      "updatedAt": "2026-08-26T08:00:00.000Z"
+    },
+    "riskPolicy": {
+      "id": "00000000-0000-4000-8000-000000000a01",
+      "ownerId": "00000000-0000-4000-8000-000000000201",
+      "riskPolicyId": "00000000-0000-4000-8000-000000000b01",
+      "tradingAccountId": "00000000-0000-4000-8000-000000000301",
+      "version": 1,
+      "versionLabel": "demo-risk-policy-v1",
+      "sourceCommandId": null,
+      "environment": "DEMO_ONLY",
+      "canonicalSymbol": "XAUUSD",
+      "maximumPermittedVolume": 0.01,
+      "maximumOpenPositions": 1,
+      "stopLossRequired": true,
+      "martingaleAllowed": false,
+      "gridTradingAllowed": false,
+      "averagingDownAllowed": false,
+      "lossBasedVolumeIncreaseAllowed": false,
+      "riskPerTradePct": 0.25,
+      "dailyLossLimitPct": 1,
+      "weeklyLossLimitPct": 3,
+      "maximumDrawdownPct": 5,
+      "maximumTradesPerDay": 3,
+      "minimumRiskReward": 1.5,
+      "staleDataMaxAgeSeconds": 10,
+      "maximumSpreadPoints": 3.5,
+      "spreadWarningPoints": 2.8,
+      "newsBlackoutMinutes": 15,
+      "proposalExpirySeconds": 30,
+      "entryTolerancePoints": 0.6,
+      "minimumSampleSize": 30,
+      "requireCalibratedModel": false,
+      "maximumSlippagePoints": 0.5,
+      "automaticRetryOnBrokerReject": false,
+      "reason": "Inactive contract parity fixture only",
+      "createdByType": "system",
+      "createdBy": "local-seed-system",
+      "createdAt": "2026-08-26T08:00:00.000Z"
+    }
+  }
+}

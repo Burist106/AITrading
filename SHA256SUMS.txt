@@ -1,0 +1,16 @@
+c38c744656e4e683f602417ca0d175290112fc0d721fb4985169bd5c95083b56  ./AGENTS.md
+1e413f52c532e85a2cd22592781ba03cb8c6c72a94d1c87738b929437416e328  ./CODEX_NEXT_PROMPTS.md
+f6be7022d6c1988b50b2be5549ebd68a2f406e5840b71266afd9f90391948dfc  ./CODEX_START_PROMPT.md
+2d4393a68123935e2b0fd5597fce415434821a5a4bad7cd2757e6548f3a1e7e0  ./README_FIRST.md
+f32cb34346ea37f2f52da0347834853f17bc52f03ab7d55a027363f052ba0633  ./docs/IMPLEMENTATION_ROADMAP.md
+b8e8b8cf5a51b8e68e0c74565f30ff72e484518b965908e280e6b21a028873e5  ./docs/P0_ACCEPTANCE_GATES.md
+9f31cf5cc8d24775f42dafd54900a331fb361831823e0fcb5f293f4d8f1681f1  ./docs/design-reference/.thumbnail
+35bc91bc32b6803efa791aa1d3d3f4a3eb0625eb148a37e140b3adfb4dcfab5c  ./docs/design-reference/Aurum Console.dc.html
+4c594506435ea3e1b1b75b597fddfc20802d5ac962f5b113239c3ea7917b51b8  ./docs/design-reference/Aurum Handoff Spec.dc.html
+3b86b4577ecde850e7a92ca6bb90e13bc399e536774112400cb1613c0932f7fe  ./docs/design-reference/PATCH_REPORT.md
+a152602ffec4485a7543a5f2fe8efcc9a91f499b70f0669cdb932412bfd5e11d  ./docs/design-reference/_ds/modernist-e41935e1-cd21-492a-9951-fc2a8ae3da10/_adherence.oxlintrc.json
+6138a8418649050c65574c0abd8394e05a58cfb233f29cc3c2502923753a18ca  ./docs/design-reference/_ds/modernist-e41935e1-cd21-492a-9951-fc2a8ae3da10/_ds_bundle.js
+5a5662c539da3adb56123284636f7ab1a505ed0cd05bed3e38db93894bc5875e  ./docs/design-reference/_ds/modernist-e41935e1-cd21-492a-9951-fc2a8ae3da10/_ds_manifest.json
+4b7a850adf3d5b14b70b0282efc819493209d8352113f1a900083aeefd8f12f9  ./docs/design-reference/_ds/modernist-e41935e1-cd21-492a-9951-fc2a8ae3da10/readme.md
+cf9fcf75ac84dfe7517177eb14acf5a20ca4410c55691ab9879c6af7b2168400  ./docs/design-reference/_ds/modernist-e41935e1-cd21-492a-9951-fc2a8ae3da10/styles.css
+8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe  ./docs/design-reference/support.js

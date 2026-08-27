@@ -1,0 +1,64 @@
+name: Aurum checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+      - name: Enable exact pnpm
+        run: corepack enable && corepack prepare pnpm@11.24.0 --activate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.13.7
+          cache: pip
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Worker dependencies
+        run: pnpm worker:install
+      - name: Run Bootstrap quality gates
+        run: pnpm check
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_NO_UPDATE_NOTIFIER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+      - name: Enable exact pnpm
+        run: corepack enable && corepack prepare pnpm@11.24.0 --activate
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Start localhost-only Supabase
+        run: pnpm db:start
+      - name: Reset local database from zero
+        run: pnpm db:reset
+      - name: Verify a second deterministic reset
+        run: pnpm db:reset
+      - name: Lint the local database schema
+        run: pnpm db:lint
+      - name: Run pgTAP and concurrent database tests
+        run: pnpm db:test
+      - name: Verify generated database types
+        run: pnpm db:types:check
+      - name: Stop local Supabase
+        if: always()
+        continue-on-error: true
+        run: pnpm db:stop

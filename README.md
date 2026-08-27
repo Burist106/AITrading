@@ -1,2 +1,3 @@
 # AITrading
+
 โปรเจค AI เทรด

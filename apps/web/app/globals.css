@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans-thai/400.css";
+@import "@fontsource/ibm-plex-sans-thai/500.css";
+@import "@fontsource/ibm-plex-sans-thai/600.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/archivo/700.css";
+
+@theme {
+  --color-canvas: #141312;
+  --color-surface: #1c1b1a;
+  --color-elevated: #242322;
+  --color-row: #302e2d;
+  --color-line: #3f3d3c;
+  --color-line-strong: #9a9593;
+  --color-ink: #f5f3f2;
+  --color-muted: #b9b4b2;
+  --color-gold: #d9b054;
+  --color-buy: #4cc39e;
+  --color-sell: #ff8a6e;
+  --color-blocked: #e8836b;
+  --color-critical: #ff5c3d;
+  --color-critical-fill: #c62810;
+  --color-warning: #e8a54a;
+  --color-info: #6fb0e0;
+  --font-sans: "IBM Plex Sans Thai", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Archivo", "IBM Plex Sans Thai", system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-canvas);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 85% -10%,
+      rgb(217 176 84 / 8%),
+      transparent 31rem
+    ),
+    var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+a,
+button,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(217 176 84 / 30%);
+  color: var(--color-ink);
+}

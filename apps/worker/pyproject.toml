@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aurum-worker"
+version = "0.1.0"
+description = "Safety-first Aurum Console Demo Worker bootstrap scaffold"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "pydantic==2.13.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "hatchling==1.32.0",
+  "mypy==2.3.1",
+  "pytest==9.1.1",
+  "ruff==0.16.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aurum_worker"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B017"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "tests"]
+pretty = true
+show_error_codes = true
+warn_unreachable = true

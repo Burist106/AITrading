@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="_ds/modernist-e41935e1-cd21-492a-9951-fc2a8ae3da10/styles.css">
+<style>
+body{margin:0;background:#f5f3f2;color:#201e1d;font-family:"IBM Plex Sans Thai","Archivo",system-ui,sans-serif;font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+*,*::before,*::after{box-sizing:border-box}
+a{color:#ae1800}
+a:hover{color:#7c1405}
+:focus-visible{outline:2px solid #c62810;outline-offset:2px}
+::selection{background:rgba(198,40,16,.26)}
+pre{margin:0;font-family:"IBM Plex Mono",ui-monospace,monospace}
+</style>
+</helmet>
+
+<div style="max-width:1280px;margin:0 auto;padding:0 40px 96px">
+
+  <header style="padding:56px 0 26px;border-bottom:2px solid rgba(32,30,29,.4)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;flex-wrap:wrap">
+      <span style="background:#c62810;color:#fff;font-weight:700;font-size:12px;letter-spacing:.08em;padding:5px 10px">DEMO ONLY</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">XAUUSD · MT5 DEMO · MAXIMUM PERMITTED LOT 0.01 · MAX 1 POSITION</span>
+      <span style="border:1px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:4px 9px">REVISION 2.1 · APPROVED FOR P0 IMPLEMENTATION</span>
+    </div>
+    <h1 style="margin:0 0 14px;font-family:'Archivo';font-weight:800;font-size:52px;line-height:1.05;letter-spacing:-.03em;max-width:940px">Aurum Console<br>Developer Handoff Specification</h1>
+    <p style="margin:0;max-width:800px;font-size:15px;line-height:1.65;color:rgba(32,30,29,.75)">ข้อกำหนดสำหรับพัฒนาระบบด้วย React, TypeScript, Tailwind CSS, shadcn/ui, Supabase และ Windows Python MT5 Worker ฉบับ 2.1 เป็นการแก้ความถูกต้องรอบสุดท้ายก่อนลงมือพัฒนา: คิวคำสั่งแบบถาวร สถานะหยุดฉุกเฉินที่ยืนยันไม่ได้ ตัวอย่างการคำนวณปริมาณที่กระทบยอดตรงกัน จำนวนกฎที่คำนวณจากข้อมูลจริง การยืนยันตัวตนบนมือถือ ข้อมูลลับของ Worker และตารางคอนทราสต์ทุกพื้นผิว</p>
+    <div style="display:flex;gap:0;margin-top:26px;border:1px solid rgba(32,30,29,.4);flex-wrap:wrap">
+      <div style="flex:1;min-width:210px;padding:13px 16px;border-right:1px solid rgba(32,30,29,.25)"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.55)">PROTOTYPE</div><a href="Aurum Console.dc.html" style="font-weight:700;font-size:14px">Aurum Console →</a></div>
+      <div style="flex:1;min-width:210px;padding:13px 16px;border-right:1px solid rgba(32,30,29,.25)"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.55)">DESIGN SYSTEM</div><div style="font-weight:700;font-size:14px">Modernist · dark surface variant</div></div>
+      <div style="flex:1;min-width:210px;padding:13px 16px;border-right:1px solid rgba(32,30,29,.25)"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.55)">TARGETS</div><div style="font-weight:700;font-size:14px">1440×900 · 1280×720 · 390×844</div></div>
+      <div style="flex:1;min-width:210px;padding:13px 16px;border-right:1px solid rgba(32,30,29,.25)"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.55)">STACK</div><div style="font-weight:700;font-size:14px">React · TS · Tailwind · shadcn · Supabase</div></div>
+      <div style="flex:1;min-width:210px;padding:13px 16px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.55)">PATCH REPORT</div><a href="PATCH_REPORT.md" style="font-weight:700;font-size:14px">PATCH_REPORT.md →</a></div>
+    </div>
+  </header>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">01</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">สถาปัตยกรรมระบบ</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">SYSTEM ARCHITECTURE</span>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">ระบบแบ่งเป็นสองระนาบที่แยกความรับผิดชอบชัดเจน เบราว์เซอร์เป็นส่วนแสดงผลและส่งเจตนา Supabase เป็นระนาบควบคุมและฐานข้อมูลปฏิบัติการ และ Windows Python MT5 Worker เป็นระนาบเดียวที่มีสิทธิ์ติดต่อโบรกเกอร์</p>
+    <div style="border:1px solid rgba(32,30,29,.4);background:#fff;padding:22px">
+      <div style="display:flex;align-items:stretch;gap:0;flex-wrap:wrap">
+        <sc-for list="{{ planes }}" as="p" hint-placeholder-count="3">
+          <div style="flex:1;min-width:250px;display:flex;align-items:stretch">
+            <div style="flex:1;border:1px solid rgba(32,30,29,.35);border-top:3px solid {{ p.c }};padding:13px 15px;display:flex;flex-direction:column;gap:7px">
+              <span style="font-weight:700;font-size:14px;color:{{ p.c }}">{{ p.t }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.55);line-height:1.45">{{ p.sub }}</span>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-top:2px">
+                <sc-for list="{{ p.items }}" as="i" hint-placeholder-count="6">
+                  <div style="display:flex;gap:8px;align-items:flex-start">
+                    <span style="flex:none;width:4px;height:4px;background:{{ p.c }};display:block;margin-top:8px"></span>
+                    <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.76)">{{ i }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <span style="flex:none;width:26px;align-self:center;text-align:center;font-family:'IBM Plex Mono',monospace;color:rgba(32,30,29,.4)">{{ p.arrow }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:18px;padding-top:16px;border-top:2px solid rgba(32,30,29,.35);display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.5)">ปลายทาง</span>
+        <span style="border:2px solid #201e1d;padding:7px 13px;font-weight:700;font-size:13px">MT5 Demo Account</span>
+        <span style="flex:1;min-width:340px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.72)">เบราว์เซอร์ไม่มีเส้นทางใดไปถึง MT5 ได้โดยตรง การเปลี่ยนสถานะที่โบรกเกอร์เกิดจาก Worker เท่านั้น และ Worker ตรวจกฎครั้งสุดท้ายเสมอแม้ผู้ใช้จะอนุมัติมาแล้ว</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">02</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">ขอบเขตสิทธิ์ของ Frontend</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">PERMISSION BOUNDARIES</span>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">เบราว์เซอร์ส่งเจตนาของผู้ใช้ได้ แต่สร้าง แก้ไข หรือปิดสถานะการทำงานของโบรกเกอร์โดยตรงไม่ได้ ทุกคำสั่งผ่าน Edge Function หรือ RPC ที่ป้องกันไว้ แล้วกลายเป็นแถวใน system_commands ที่ Worker เป็นผู้อ่าน</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid #c62810">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px;color:#c62810">สิ่งที่ Frontend ทำไม่ได้</div>
+        <sc-for list="{{ forbidden }}" as="f" hint-placeholder-count="8">
+          <div style="padding:8px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">✕</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.5">{{ f.t }}</span>
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">{{ f.tbl }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid #0f7a5f">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px;color:#0f7a5f">เจตนาที่ส่งได้ · SECURED INTENTS</div>
+        <sc-for list="{{ intents }}" as="i" hint-placeholder-count="9">
+          <div style="padding:8px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#0f7a5f;min-width:232px">{{ i.k }}</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ i.d }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="margin-top:20px;border:1px solid rgba(32,30,29,.4);background:#fff;padding:20px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+        <span style="width:22px;height:2px;background:#c62810;display:block"></span>
+        <h3 style="margin:0;font-family:'Archivo';font-weight:700;font-size:18px">การกดปุ่มไม่เท่ากับการดำเนินการเสร็จสิ้น</h3>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch">
+        <sc-for list="{{ closeFlow }}" as="s" hint-placeholder-count="5">
+          <div style="flex:1 1 174px;display:flex;align-items:center">
+            <div style="flex:1;border:1px solid rgba(32,30,29,.4);border-left:3px solid {{ s.c }};padding:11px 13px;background:#eae9e9;display:flex;flex-direction:column;gap:3px;min-height:90px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.5)">{{ s.n }}</span>
+              <span style="font-weight:700;font-size:13px;line-height:1.3">{{ s.t }}</span>
+              <span style="font-size:11.5px;color:rgba(32,30,29,.62);line-height:1.4">{{ s.s }}</span>
+            </div>
+            <span style="flex:none;width:24px;text-align:center;font-family:'IBM Plex Mono',monospace;color:rgba(32,30,29,.4)">{{ s.arrow }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin:18px 0 0;font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.72)">ห้ามข้ามจากการคลิกปุ่มไปยังสถานะ “ปิดแล้ว” โดยตรง UI ต้องมีสถานะกลางที่มองเห็นได้ทุกขั้น และต้องออกแบบกรณี timeout การปฏิเสธ และความล้มเหลวบางส่วนด้วย ต้นแบบแสดงลำดับนี้เป็น command timeline ที่มุมขวาล่างของหน้าจอ</p>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">03</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Screen-to-data map</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">IA · PRIORITY · SUPABASE ENTITIES</span>
+    </div>
+    <div style="border:1px solid rgba(32,30,29,.4);overflow-x:auto">
+      <div style="min-width:1080px">
+        <div style="display:grid;grid-template-columns:52px 1.05fr 1fr 1.5fr 1.5fr 1.1fr;background:#eae9e9;border-bottom:2px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">
+          <span style="padding:9px 10px">PRI</span><span style="padding:9px 10px">หน้าจอ</span><span style="padding:9px 10px">ROUTE</span><span style="padding:9px 10px">อ่านจาก (READS)</span><span style="padding:9px 10px">ส่งคำสั่ง (SENDS)</span><span style="padding:9px 10px">REALTIME</span>
+        </div>
+        <sc-for list="{{ screenMap }}" as="r" hint-placeholder-count="11">
+          <div style="display:grid;grid-template-columns:52px 1.05fr 1fr 1.5fr 1.5fr 1.1fr;border-bottom:1px solid rgba(32,30,29,.16);align-items:start">
+            <span style="padding:10px"><span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;border:1px solid {{ r.pc }};color:{{ r.pc }};padding:2px 5px">{{ r.pri }}</span></span>
+            <span style="padding:10px;font-weight:700;font-size:13px">{{ r.th }}</span>
+            <span style="padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#ae1800">{{ r.route }}</span>
+            <span style="padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;color:rgba(32,30,29,.7)">{{ r.reads }}</span>
+            <span style="padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;color:{{ r.sendsC }}">{{ r.sends }}</span>
+            <span style="padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;color:rgba(32,30,29,.6)">{{ r.rt }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="margin-top:14px;border-left:3px solid #c62810;background:rgba(198,40,16,.06);padding:12px 15px">
+      <span style="font-weight:700;font-size:13px;color:#c62810">ไม่มีหน้าจอใดเขียน broker_orders, trade_executions, positions หรือ risk_checks โดยตรง</span>
+      <div style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.78);margin-top:3px">ตารางเหล่านี้เขียนได้จาก Windows MT5 Worker ด้วย Dedicated Worker Credential แบบสิทธิ์น้อยที่สุดเท่านั้น หน้าจอทั้งหมดอ่านผ่าน RLS และส่งเจตนาผ่าน Edge Function</div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">04</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Supabase integration handoff</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid #201e1d">
+        <div style="padding:11px 14px;border-bottom:1px solid rgba(32,30,29,.25);font-weight:700;font-size:13.5px">Authentication model</div>
+        <div style="padding:13px 14px;display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{ authModel }}" as="a" hint-placeholder-count="7">
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:5px;height:5px;background:#201e1d;display:block;margin-top:8px"></span>
+              <span style="flex:1;font-size:13px;line-height:1.6;color:rgba(32,30,29,.78)">{{ a }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid #1f5f8f">
+        <div style="padding:11px 14px;border-bottom:1px solid rgba(32,30,29,.25);font-weight:700;font-size:13.5px">Realtime channel map</div>
+        <sc-for list="{{ realtime }}" as="r" hint-placeholder-count="7">
+          <div style="padding:8px 14px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:none;min-width:196px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#1f5f8f">{{ r.ch }}</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ r.who }}</span>
+          </div>
+        </sc-for>
+        <div style="padding:11px 14px;background:#eae9e9;border-top:1px solid rgba(32,30,29,.25)">
+          <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.75)">ห้ามให้เบราว์เซอร์สมัครรับตาราง tick ดิบ · Worker เก็บ tick ไว้ในหน่วยความจำแล้วส่ง snapshot ที่ throttle ทุก 0.5–1 วินาทีผ่าน Broadcast · tick history เก็บเป็นไฟล์ Parquet ในเครื่องหรือ Supabase Storage</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;border:1px solid rgba(32,30,29,.4)">
+      <div style="padding:11px 14px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13.5px">RLS intent matrix</div>
+      <div style="display:grid;grid-template-columns:1.1fr 92px 1.5fr 1.2fr;background:#eae9e9;border-bottom:1px solid rgba(32,30,29,.3);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">
+        <span style="padding:8px 12px">RESOURCE</span><span style="padding:8px 12px">USER READ</span><span style="padding:8px 12px">USER WRITE</span><span style="padding:8px 12px">WORKER</span>
+      </div>
+      <sc-for list="{{ rls }}" as="r" hint-placeholder-count="14">
+        <div style="display:grid;grid-template-columns:1.1fr 92px 1.5fr 1.2fr;border-bottom:1px solid rgba(32,30,29,.14);align-items:center">
+          <span style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">{{ r.res }}</span>
+          <span style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#0f7a5f">{{ r.read }}</span>
+          <span style="padding:8px 12px;font-size:12.5px;color:{{ r.wc }}">{{ r.write }}</span>
+          <span style="padding:8px 12px;font-size:12.5px;color:rgba(32,30,29,.65)">{{ r.worker }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:16px;border:1px solid rgba(32,30,29,.4)">
+      <div style="padding:11px 14px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13.5px">Edge Function / RPC contracts</div>
+      <sc-for list="{{ contracts }}" as="c" hint-placeholder-count="9">
+        <div style="border-bottom:1px solid rgba(32,30,29,.18);padding:12px 14px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:7px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;color:#ae1800">{{ c.name }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">{{ c.auth }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid #c62810;color:#c62810;padding:1px 6px">IDEMPOTENT</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid rgba(32,30,29,.4);color:rgba(32,30,29,.6);padding:1px 6px">AUDITED</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.2fr;gap:1px;background:rgba(32,30,29,.2);border:1px solid rgba(32,30,29,.2)">
+            <div style="background:#fff;padding:8px 11px;display:flex;flex-direction:column;gap:2px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:rgba(32,30,29,.5)">INPUT</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.5;color:rgba(32,30,29,.78)">{{ c.input }}</span>
+            </div>
+            <div style="background:#fff;padding:8px 11px;display:flex;flex-direction:column;gap:2px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:rgba(32,30,29,.5)">PENDING</span>
+              <span style="font-size:12px;line-height:1.5;color:rgba(32,30,29,.75)">{{ c.pending }}</span>
+            </div>
+            <div style="background:#fff;padding:8px 11px;display:flex;flex-direction:column;gap:2px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:rgba(32,30,29,.5)">SUCCESS</span>
+              <span style="font-size:12px;line-height:1.5;color:#0f7a5f">{{ c.success }}</span>
+            </div>
+            <div style="background:#fff;padding:8px 11px;display:flex;flex-direction:column;gap:2px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:rgba(32,30,29,.5)">FAILURE</span>
+              <span style="font-size:12px;line-height:1.5;color:#c62810">{{ c.failure }}</span>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">05</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">การคำนวณปริมาณ</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">POSITION SIZING SEMANTICS</span>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">ปริมาณสูงสุดที่อนุญาตคือ 0.01 lot ซึ่งไม่ได้แปลว่าทุกไม้ใช้ 0.01 lot ปริมาณคำนวณจากงบความเสี่ยงและระยะ Stop Loss เสมอ และ Stop Loss ต้องมาจากโครงสร้างราคาหรือความผันผวน ไม่ใช่จากความต้องการให้ปริมาณขั้นต่ำพอดีกับงบความเสี่ยง</p>
+    <div style="border:1px solid rgba(32,30,29,.4);background:#fff;padding:20px">
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch">
+        <sc-for list="{{ sizingFlow }}" as="s" hint-placeholder-count="8">
+          <div style="flex:1 1 154px;display:flex;align-items:center">
+            <div style="flex:1;border:1px solid rgba(32,30,29,.4);border-left:3px solid {{ s.c }};padding:10px 12px;background:#eae9e9;display:flex;flex-direction:column;gap:3px;min-height:84px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">{{ s.n }}</span>
+              <span style="font-weight:700;font-size:12.5px;line-height:1.35">{{ s.t }}</span>
+            </div>
+            <span style="flex:none;width:22px;text-align:center;font-family:'IBM Plex Mono',monospace;color:rgba(32,30,29,.4)">{{ s.arrow }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">ฟิลด์ที่หน้าจอข้อเสนอต้องแสดง</div>
+        <sc-for list="{{ sizingFields }}" as="f" hint-placeholder-count="8">
+          <div style="padding:8px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:1;font-size:12.5px">{{ f.th }}</span>
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:rgba(32,30,29,.55)">{{ f.en }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border:1px solid #c62810;border-top:3px solid #c62810">
+        <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);background:rgba(198,40,16,.07);font-weight:700;font-size:13px;color:#c62810">กรณีตัวอย่าง · ปริมาณขั้นต่ำเกินความเสี่ยง</div>
+        <div style="padding:13px;display:flex;flex-direction:column;gap:1px;background:rgba(32,30,29,.2)">
+          <sc-for list="{{ minlotCase }}" as="m" hint-placeholder-count="4">
+            <div style="background:#fff;padding:8px 12px;display:flex;justify-content:space-between;gap:10px">
+              <span style="font-size:12.5px;color:rgba(32,30,29,.7)">{{ m.k }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px;color:{{ m.c }}">{{ m.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:0 13px 13px">
+          <div style="border-left:3px solid #c62810;background:rgba(198,40,16,.06);padding:10px 13px">
+            <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.8)">ปริมาณขั้นต่ำของโบรกเกอร์ทำให้ความเสี่ยงเกินขีดจำกัด ระบบระงับข้อเสนอ และห้ามขยับ Stop Loss ให้แคบลงเพื่อให้พอดีกับปริมาณขั้นต่ำ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">06</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">เกณฑ์สัญญาณและหลักฐาน</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">SIGNAL EVIDENCE · NO HARD-CODED THRESHOLD</span>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">ไม่มีการกำหนดเกณฑ์คะแนนตายตัวเป็นตัวตัดสิน AUTO เพราะยังไม่มีข้อมูลเชิงประจักษ์รองรับ ใช้ eligibility policy ที่มีเวอร์ชันแทน และห้ามแสดงตัวเลขในรูป “AI Confidence” จนกว่าจะมีโมเดลที่สอบเทียบแล้วจริง</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">Eligibility policy — versioned</div>
+        <sc-for list="{{ eligKeys }}" as="k" hint-placeholder-count="6">
+          <div style="padding:8px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;min-width:230px;color:#1f5f8f">{{ k.k }}</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ k.d }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="border:1px solid rgba(32,30,29,.4)">
+          <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">ป้ายที่อนุญาต / ไม่อนุญาต</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(32,30,29,.2)">
+            <div style="background:#fff;padding:11px 13px;display:flex;flex-direction:column;gap:6px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#0f7a5f">ใช้ได้</span>
+              <sc-for list="{{ okLabels }}" as="l" hint-placeholder-count="6">
+                <span style="font-size:12.5px;color:rgba(32,30,29,.78)">{{ l }}</span>
+              </sc-for>
+            </div>
+            <div style="background:#fff;padding:11px 13px;display:flex;flex-direction:column;gap:6px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c62810">ห้ามใช้</span>
+              <sc-for list="{{ badLabels }}" as="l" hint-placeholder-count="4">
+                <span style="font-size:12.5px;color:rgba(32,30,29,.78)">{{ l }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <div style="border:1px solid rgba(32,30,29,.4)">
+          <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">การนำเสนอที่ปลอดภัยในเวอร์ชันแรก</div>
+          <div style="padding:13px;display:flex;flex-direction:column;gap:1px;background:rgba(32,30,29,.2)">
+            <sc-for list="{{ safePresent }}" as="s" hint-placeholder-count="3">
+              <div style="background:#fff;padding:9px 12px;display:flex;justify-content:space-between;gap:10px">
+                <span style="font-size:12.5px;color:rgba(32,30,29,.72)">{{ s.k }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px;color:{{ s.c }}">{{ s.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">6A</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">คิวคำสั่งแบบถาวร</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">DURABLE COMMAND QUEUE</span>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">Supabase Realtime เป็นเพียงกลไกปลุกให้ Worker มาอ่านงาน ไม่ใช่คิวเอง ความถูกต้องต้องไม่ขึ้นกับเหตุการณ์ Realtime ที่หายไปได้</p>
+    <div style="border:1px solid rgba(32,30,29,.4);background:#fff;padding:20px">
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch">
+        <sc-for list="{{ queueFlow }}" as="s" hint-placeholder-count="9">
+          <div style="flex:1 1 158px;display:flex;align-items:center">
+            <div style="flex:1;border:1px solid rgba(32,30,29,.4);border-left:3px solid {{ s.c }};padding:10px 12px;background:#eae9e9;display:flex;flex-direction:column;gap:3px;min-height:88px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">{{ s.n }}</span>
+              <span style="font-weight:700;font-size:12.5px;line-height:1.35">{{ s.t }}</span>
+            </div>
+            <span style="flex:none;width:22px;text-align:center;font-family:'IBM Plex Mono',monospace;color:rgba(32,30,29,.4)">{{ s.arrow }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:18px;padding-top:16px;border-top:2px solid rgba(32,30,29,.35);display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.5)">WORKER ต้องกู้คืนคำสั่งได้หลังเหตุการณ์เหล่านี้</span>
+          <sc-for list="{{ recoverAfter }}" as="r" hint-placeholder-count="5">
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <span style="flex:none;width:5px;height:5px;background:#c62810;display:block;margin-top:8px"></span>
+              <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ r }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.5)">ลำดับตอนเชื่อมต่อกลับ</span>
+          <sc-for list="{{ reconnectOrder }}" as="r" hint-placeholder-count="4">
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#1f5f8f;width:14px">{{ r.n }}</span>
+              <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ r.t }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">6B</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">สถานะการหยุดระบบฉุกเฉิน</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">EMERGENCY STOP STATE MACHINE</span>
+    </div>
+    <div style="border-left:3px solid #c62810;background:rgba(198,40,16,.06);padding:12px 15px;margin-bottom:16px">
+      <span style="font-weight:700;font-size:13px;color:#c62810">Emergency Stop มีสถานะล้มเหลวได้</span>
+      <div style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.8);margin-top:3px">การที่ Supabase รับคำสั่งไม่ได้แปลว่า Windows Worker หยุดแล้ว UI ต้องแยกสถานะ “บันทึกคำขอแล้ว” ออกจาก “Worker ยืนยันแล้ว” และต้องมีสถานะวิกฤตเมื่อยืนยันไม่ได้</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">สถานะปกติ · HAPPY PATH</div>
+        <sc-for list="{{ estopStates }}" as="e" hint-placeholder-count="6">
+          <div style="padding:9px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.45);width:16px">{{ e.n }}</span>
+            <span style="flex:none;min-width:236px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:{{ e.c }}">{{ e.k }}</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ e.d }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border:1px solid #c62810;border-top:3px solid #c62810">
+        <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);background:rgba(198,40,16,.07);font-weight:700;font-size:13px;color:#c62810">สถานะล้มเหลวหรือไม่แน่นอน</div>
+        <sc-for list="{{ estopFail }}" as="e" hint-placeholder-count="5">
+          <div style="padding:9px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;flex-direction:column;gap:2px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#c62810">{{ e.k }}</span>
+            <span style="font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ e.d }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">คำแนะนำที่ต้องแสดงเมื่อยืนยันไม่ได้</div>
+        <div style="padding:12px 13px;display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ estopActions }}" as="a" hint-placeholder-count="5">
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#c62810;width:14px">{{ a.n }}</span>
+              <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ a.t }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid #0f7a5f">
+        <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);font-weight:700;font-size:13px;color:#0f7a5f">กลไกความปลอดภัยในเครื่อง · LOCAL SAFETY</div>
+        <div style="padding:12px 13px;display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ localSafety }}" as="l" hint-placeholder-count="4">
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:5px;height:5px;background:#0f7a5f;display:block;margin-top:8px"></span>
+              <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ l }}</span>
+            </div>
+          </sc-for>
+          <div style="margin-top:4px;padding-top:9px;border-top:1px solid rgba(32,30,29,.18)">
+            <span style="font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.7)">System Health ต้องแสดงทั้ง Supabase Emergency Stop และ Local Emergency Stop แยกกัน เพื่อให้เห็นว่าอันไหนทำงานอยู่</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">6C</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">ตัวอย่างการคำนวณปริมาณที่กระทบยอดตรงกัน</h2>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">ข้อมูลจำลองสำหรับการออกแบบ · สมมติ XAU/USD ที่ contract size 100 oz ต่อ 1.00 lot ทำให้ 0.01 lot = 1 oz และการเคลื่อนของราคา 1.00 USD ต่อ oz = ขาดทุนหรือกำไร 1.00 USD ต่อ 0.01 lot · ค่าจริงต้องอ่านจาก symbol specification ของโบรกเกอร์ ไม่ hard-code</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <sc-for list="{{ sizingExamples }}" as="x" hint-placeholder-count="2">
+        <div style="border:1px solid {{ x.c }};border-top:3px solid {{ x.c }}">
+          <div style="padding:11px 14px;border-bottom:1px solid rgba(32,30,29,.25);background:{{ x.bg }};display:flex;align-items:baseline;gap:10px">
+            <span style="font-weight:700;font-size:13.5px;color:{{ x.c }}">{{ x.title }}</span>
+            <span style="flex:1"></span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;color:{{ x.c }};border:1px solid {{ x.c }};padding:1px 6px">{{ x.result }}</span>
+          </div>
+          <sc-for list="{{ x.rows }}" as="r" hint-placeholder-count="14">
+            <div style="padding:7px 14px;border-bottom:1px solid rgba(32,30,29,.13);display:flex;gap:10px;align-items:baseline">
+              <span style="flex:1;font-size:12.5px;color:rgba(32,30,29,.72)">{{ r.k }}</span>
+              <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.45);min-width:172px">{{ r.en }}</span>
+              <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px;color:{{ r.c }};min-width:120px;text-align:right">{{ r.v }}</span>
+            </div>
+          </sc-for>
+          <div style="padding:11px 14px;background:{{ x.bg }}">
+            <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.8)">{{ x.note }}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">6D</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">ความปลอดภัยของการอนุมัติบนมือถือ</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">LIFF IDENTITY + SINGLE-USE TOKEN</span>
+    </div>
+    <div style="border-left:3px solid #c62810;background:rgba(198,40,16,.06);padding:12px 15px;margin-bottom:16px">
+      <span style="font-weight:700;font-size:13px;color:#c62810">ลิงก์ที่ลงลายเซ็นอย่างเดียวไม่พอ ถ้าลิงก์ถูกส่งต่อ</span>
+      <div style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.8);margin-top:3px">ต้องยืนยันตัวตนผ่าน LINE LIFF และเทียบกับรายชื่อผู้ใช้ที่อนุญาต ร่วมกับโทเคนใช้ครั้งเดียวที่ผูกกับข้อเสนอและเวอร์ชันของข้อเสนอ</div>
+    </div>
+    <div style="border:1px solid rgba(32,30,29,.4);background:#fff;padding:20px;margin-bottom:16px">
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch">
+        <sc-for list="{{ liffFlow }}" as="s" hint-placeholder-count="10">
+          <div style="flex:1 1 150px;display:flex;align-items:center">
+            <div style="flex:1;border:1px solid rgba(32,30,29,.4);border-left:3px solid {{ s.c }};padding:10px 12px;background:#eae9e9;display:flex;flex-direction:column;gap:3px;min-height:84px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">{{ s.n }}</span>
+              <span style="font-weight:700;font-size:12.5px;line-height:1.35">{{ s.t }}</span>
+            </div>
+            <span style="flex:none;width:22px;text-align:center;font-family:'IBM Plex Mono',monospace;color:rgba(32,30,29,.4)">{{ s.arrow }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">คุณสมบัติของโทเคน</div>
+        <div style="padding:12px 13px;display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ tokenProps }}" as="t" hint-placeholder-count="8">
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:5px;height:5px;background:#c62810;display:block;margin-top:8px"></span>
+              <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ t }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:11px 13px;background:#eae9e9;border-top:1px solid rgba(32,30,29,.25)">
+          <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.75)">การอนุมัติต้องอ้าง <span style="font-family:'IBM Plex Mono',monospace">proposal_id · proposal_version · idempotency_key · approval_session_id</span> และ URL ต้องไม่เป็นแหล่งความจริงของ direction, entry, SL, TP, lot, risk, account, symbol หรือ order type</span>
+        </div>
+      </div>
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">สถานะที่ต้องออกแบบ</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(32,30,29,.2)">
+          <sc-for list="{{ mobileStates }}" as="m" hint-placeholder-count="11">
+            <div style="background:#fff;padding:8px 12px;display:flex;gap:8px;align-items:baseline">
+              <span style="flex:none;width:5px;height:5px;background:{{ m.c }};display:block;margin-top:7px"></span>
+              <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.78)">{{ m.t }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">6E</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">ข้อมูลลับและขอบเขตของคีย์</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.5)">CREDENTIAL BOUNDARIES</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid #0f7a5f">
+        <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);font-weight:700;font-size:13px;color:#0f7a5f">Dedicated Worker Credential</div>
+        <div style="padding:12px 13px;display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ workerCred }}" as="w" hint-placeholder-count="10">
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:5px;height:5px;background:#0f7a5f;display:block;margin-top:8px"></span>
+              <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ w }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="border:1px solid #c62810;border-top:3px solid #c62810">
+          <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);background:rgba(198,40,16,.07);font-weight:700;font-size:13px;color:#c62810">Frontend ต้องไม่ได้รับสิ่งเหล่านี้</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(32,30,29,.2)">
+            <sc-for list="{{ neverInBrowser }}" as="n" hint-placeholder-count="8">
+              <div style="background:#fff;padding:8px 12px;display:flex;gap:8px;align-items:baseline">
+                <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#c62810">✕</span>
+                <span style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ n }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="border:1px solid rgba(32,30,29,.4)">
+          <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">MT5 credentials</div>
+          <div style="padding:12px 13px;display:flex;flex-direction:column;gap:7px">
+            <span style="font-size:13px;line-height:1.6;color:rgba(32,30,29,.82);font-weight:600">MT5 login, password, server และ terminal path มีอยู่เฉพาะบน Windows Execution Node</span>
+            <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.75)">ห้ามเก็บรหัสผ่าน MT5 ใน: ตาราง Supabase · Supabase Storage · local storage ของเบราว์เซอร์ · environment variable ของ frontend · GitHub · ข้อความ LINE · audit log · error report · analytics event</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">07</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">TypeScript interfaces</h2>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">ชุดนี้แทนที่อินเทอร์เฟซฉบับก่อนทั้งหมด ไม่มีอินเทอร์เฟซเก่าเหลือคู่ขนาน · โมเดลสถานะคำสั่งแบบเดิม (requested / received / submitted / confirmed / timeout) ถูกยกเลิกและแทนด้วย SystemCommandStatus</p>
+    <div style="border:1px solid rgba(32,30,29,.4);background:#201e1d;padding:20px 22px;overflow-x:auto">
+      <pre style="font-size:12px;line-height:1.65;color:#e8e5e4">{{ schema }}</pre>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">08</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Design system · typography &amp; color</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">Typography — Thai-first</div>
+        <sc-for list="{{ typeScale }}" as="t" hint-placeholder-count="9">
+          <div style="padding:8px 13px;border-bottom:1px solid rgba(32,30,29,.14);display:flex;gap:10px;align-items:baseline">
+            <span style="flex:none;width:150px;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ t.k }}</span>
+            <span style="flex:none;width:108px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:rgba(32,30,29,.6)">{{ t.v }}</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.5;color:rgba(32,30,29,.75)">{{ t.use }}</span>
+          </div>
+        </sc-for>
+        <div style="padding:11px 13px;background:#eae9e9;border-top:1px solid rgba(32,30,29,.25)">
+          <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.75)">IBM Plex Sans Thai เป็นฟอนต์หลักของทุกเนื้อหา · Archivo ใช้เฉพาะ wordmark และหัวข้อภาษาอังกฤษขนาดใหญ่ · IBM Plex Mono ใช้กับตัวเลข เวลา รหัส และ log · ห้ามใส่ letter-spacing แบบตัวพิมพ์ใหญ่กับข้อความไทย · ใช้ tabular-nums กับราคา P&amp;L เปอร์เซ็นต์ ปริมาณ ความเสี่ยง เวลา และ Trade ID</span>
+        </div>
+      </div>
+      <div style="border:1px solid rgba(32,30,29,.4)">
+        <div style="padding:10px 13px;border-bottom:2px solid rgba(32,30,29,.3);background:#eae9e9;font-weight:700;font-size:13px">Semantic color tokens + contrast audit</div>
+        <div style="display:grid;grid-template-columns:40px 1fr;background:#eae9e9;border-bottom:1px solid rgba(32,30,29,.25)">
+          <span style="padding:7px 8px"></span>
+          <div style="display:grid;grid-template-columns:1.25fr 80px 62px 1.5fr;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.05em;color:rgba(32,30,29,.55)">
+            <span style="padding:7px 8px">TOKEN</span><span style="padding:7px 8px">HEX</span><span style="padding:7px 8px">RATIO</span><span style="padding:7px 8px">การใช้งาน</span>
+          </div>
+        </div>
+        <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="16">
+          <div style="display:grid;grid-template-columns:40px 1fr;border-bottom:1px solid rgba(32,30,29,.14);align-items:center">
+            <span style="margin:5px 8px;height:24px;background:{{ t.v }};border:1px solid rgba(32,30,29,.35)"></span>
+            <div style="display:grid;grid-template-columns:1.25fr 80px 62px 1.5fr;align-items:center">
+              <span style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ t.k }}</span>
+              <span style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:rgba(32,30,29,.6)">{{ t.v }}</span>
+              <span style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11.5px;color:{{ t.rc }}">{{ t.ratio }}</span>
+              <span style="padding:7px 8px;font-size:12px;line-height:1.45;color:rgba(32,30,29,.75)">{{ t.use }}</span>
+            </div>
+          </div>
+        </sc-for>
+        <div style="padding:11px 13px;background:#eae9e9;border-top:1px solid rgba(32,30,29,.25)">
+          <span style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.75)">อัตราส่วนวัดบนพื้น <span style="font-family:'IBM Plex Mono',monospace">#141312</span> · ข้อความปกติต้อง ≥ 4.5:1 ข้อความใหญ่และองค์ประกอบ UI ≥ 3:1 · <span style="font-family:'IBM Plex Mono',monospace">system-critical</span> ที่เป็นพื้นทึบใช้ <span style="font-family:'IBM Plex Mono',monospace">#c62810</span> กับตัวอักษรขาว ส่วนตัวอักษรสีแดงบนพื้นเข้มใช้ <span style="font-family:'IBM Plex Mono',monospace">#ff5c3d</span></span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;border-left:3px solid #c62810;background:rgba(198,40,16,.06);padding:12px 15px">
+      <span style="font-weight:700;font-size:13px;color:#c62810">แยกความหมายของสีแดงออกจากกัน</span>
+      <div style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.78);margin-top:3px">SELL, P&amp;L ติดลบ, ความล้มเหลวของระบบ, หยุดฉุกเฉิน, รายการที่ถูกระงับ และการตรวจกฎไม่ผ่าน ต้องไม่ใช้โทเคนเดียวกัน · <span style="font-family:'IBM Plex Mono',monospace">direction-sell</span> และ <span style="font-family:'IBM Plex Mono',monospace">pnl-negative</span> ใช้ส้มแดงอ่อน <span style="font-family:'IBM Plex Mono',monospace">#ff8a6e</span> · <span style="font-family:'IBM Plex Mono',monospace">trade-blocked</span> ใช้ <span style="font-family:'IBM Plex Mono',monospace">#e8836b</span> · <span style="font-family:'IBM Plex Mono',monospace">system-critical</span> ใช้ <span style="font-family:'IBM Plex Mono',monospace">#ff5c3d</span> บนพื้นเข้ม และ <span style="font-family:'IBM Plex Mono',monospace">#c62810</span> เมื่อเป็นพื้นทึบ · ทุกสถานะต้องมีไอคอน ข้อความ และเส้นขอบประกอบด้วยเสมอ ห้ามสื่อด้วยสีอย่างเดียว</div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">09</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Component inventory</h2>
+    </div>
+    <div style="border:1px solid rgba(32,30,29,.4);overflow-x:auto">
+      <div style="min-width:1120px">
+        <div style="display:grid;grid-template-columns:1.15fr 1.3fr 1.45fr 1.25fr 1.35fr;background:#eae9e9;border-bottom:2px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">
+          <span style="padding:9px 10px">COMPONENT</span><span style="padding:9px 10px">PROPS</span><span style="padding:9px 10px">STATES</span><span style="padding:9px 10px">DATA SOURCE</span><span style="padding:9px 10px">PROHIBITED MUTATIONS</span>
+        </div>
+        <sc-for list="{{ components }}" as="c" hint-placeholder-count="34">
+          <div style="display:grid;grid-template-columns:1.15fr 1.3fr 1.45fr 1.25fr 1.35fr;border-bottom:1px solid rgba(32,30,29,.16);align-items:start">
+            <span style="padding:9px 10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#ae1800">{{ c.n }}</span>
+            <span style="padding:9px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.55;color:rgba(32,30,29,.62)">{{ c.props }}</span>
+            <span style="padding:9px 10px;font-size:12px;line-height:1.55;color:rgba(32,30,29,.75)">{{ c.states }}</span>
+            <span style="padding:9px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.55;color:rgba(32,30,29,.62)">{{ c.data }}</span>
+            <span style="padding:9px 10px;font-size:12px;line-height:1.55;color:{{ c.pc }}">{{ c.prohibited }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <p style="margin:14px 0 0;font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.7);max-width:900px">ทุกคอมโพเนนต์ต้องมีใน Storybook ครบทุกสถานะ: loading, empty, success, warning, error, offline, stale, mt5-disconnected, line-disconnected, demo-verified, live-blocked, no-signal, wait, pending, expired, human-required, approved, rejected, blocked, min-lot-exceeds-risk, order-pending, order-executed, order-rejected, blocked-after-revalidation, position-open, position-mismatch, position-closed, daily-limit, weekly-limit, max-drawdown, emergency-stop, recovering</p>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">10</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Safety rules, responsive &amp; accessibility</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <sc-for list="{{ ruleGroups }}" as="g" hint-placeholder-count="6">
+        <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid {{ g.c }}">
+          <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);font-weight:700;font-size:13.5px;color:{{ g.c }}">{{ g.title }}</div>
+          <div style="padding:12px 13px;display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="5">
+              <div style="display:flex;gap:9px;align-items:flex-start">
+                <span style="flex:none;width:5px;height:5px;background:{{ g.c }};display:block;margin-top:8px"></span>
+                <span style="flex:1;font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.78)">{{ r }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:16px;border:1px solid rgba(32,30,29,.4)">
+      <div style="display:grid;grid-template-columns:124px 1.2fr 1.2fr 1fr;background:#eae9e9;border-bottom:2px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">
+        <span style="padding:9px 10px">BREAKPOINT</span><span style="padding:9px 10px">LAYOUT</span><span style="padding:9px 10px">HEADER</span><span style="padding:9px 10px">สิ่งที่ตัดออก</span>
+      </div>
+      <sc-for list="{{ responsive }}" as="r" hint-placeholder-count="4">
+        <div style="display:grid;grid-template-columns:124px 1.2fr 1.2fr 1fr;border-bottom:1px solid rgba(32,30,29,.16);align-items:start">
+          <span style="padding:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">{{ r.bp }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.75)">{{ r.layout }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.75)">{{ r.header }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.6)">{{ r.drop }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">11</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Developer implementation notes</h2>
+    </div>
+    <div style="border:1px solid rgba(32,30,29,.4);background:#fff;padding:16px 18px;display:flex;flex-direction:column;gap:9px">
+      <sc-for list="{{ devNotes }}" as="d" hint-placeholder-count="12">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="flex:none;width:5px;height:5px;background:#201e1d;display:block;margin-top:8px"></span>
+          <span style="flex:1;font-size:13px;line-height:1.65;color:rgba(32,30,29,.8)">{{ d }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">11A</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Contrast audit · every token × every surface</h2>
+    </div>
+    <p style="margin:0 0 18px;max-width:860px;font-size:13.5px;line-height:1.65;color:rgba(32,30,29,.72)">ทุกคู่สีในตารางนี้ถูกตรวจจริง ไม่ใช่ตรวจเฉพาะพื้นหลังหลัก คอลัมน์ท้ายระบุขนาดข้อความที่อนุญาตและวิธีแก้เมื่อไม่ผ่าน</p>
+    <div style="border:1px solid rgba(32,30,29,.4);overflow-x:auto">
+      <div style="min-width:1120px">
+        <div style="display:grid;grid-template-columns:34px 1.15fr 78px 62px 62px 62px 62px 1fr 1.35fr;background:#eae9e9;border-bottom:2px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.05em;color:rgba(32,30,29,.6)">
+          <span style="padding:8px 6px"></span><span style="padding:8px 8px">TOKEN</span><span style="padding:8px 8px">HEX</span>
+          <span style="padding:8px 6px">141312</span><span style="padding:8px 6px">1c1b1a</span><span style="padding:8px 6px">242322</span><span style="padding:8px 6px">302e2d</span>
+          <span style="padding:8px 8px">TEXT SIZE PERMITTED</span><span style="padding:8px 8px">CORRECTION</span>
+        </div>
+        <sc-for list="{{ contrastMatrix }}" as="t" hint-placeholder-count="15">
+          <div style="display:grid;grid-template-columns:34px 1.15fr 78px 62px 62px 62px 62px 1fr 1.35fr;border-bottom:1px solid rgba(32,30,29,.15);align-items:center">
+            <span style="margin:5px 6px;height:22px;background:{{ t.hex }};border:1px solid rgba(32,30,29,.35)"></span>
+            <span style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ t.k }}</span>
+            <span style="padding:7px 8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:rgba(32,30,29,.6)">{{ t.hex }}</span>
+            <sc-for list="{{ t.rs }}" as="r" hint-placeholder-count="4">
+              <span style="padding:7px 6px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11.5px;color:{{ r.c }}">{{ r.v }}</span>
+            </sc-for>
+            <span style="padding:7px 8px;font-size:12px;line-height:1.45;color:{{ t.pc }}">{{ t.permitted }}</span>
+            <span style="padding:7px 8px;font-size:11.5px;line-height:1.5;color:rgba(32,30,29,.7)">{{ t.correction }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="margin-top:14px;border-left:3px solid #8a5510;background:rgba(138,85,16,.07);padding:12px 15px">
+      <span style="font-weight:700;font-size:13px;color:#8a5510">system-critical ต่ำสุดที่ 4.1:1 บนพื้น tertiary</span>
+      <div style="font-size:12.5px;line-height:1.6;color:rgba(32,30,29,.8);margin-top:3px">โทเคนนี้ผ่านเกณฑ์ข้อความปกติบนพื้นหลักและ surface แต่ไม่ผ่านบนพื้น elevated และ tertiary · บนสองพื้นผิวนั้นให้ใช้พื้นทึบ <span style="font-family:'IBM Plex Mono',monospace">--system-critical-fill #c62810</span> กับตัวอักษรขาว (5.2:1) หรือจำกัดให้ใช้เฉพาะข้อความขนาดใหญ่ · <span style="font-family:'IBM Plex Mono',monospace">--border #3f3d3c</span> เป็นเส้นตกแต่ง ไม่ใช้เป็นขอบขององค์ประกอบที่กดได้</div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">11B</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">คำเตือนสำหรับการพัฒนาด้วย Codex</h2>
+    </div>
+    <div style="border:2px solid #c62810;background:rgba(198,40,16,.06);padding:20px 22px">
+      <p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:rgba(32,30,29,.85);max-width:860px"><strong>ไฟล์ต้นแบบ .dc.html เป็นข้อกำหนดด้านภาพและพฤติกรรม ไม่ใช่โค้ดต้นทางของ production</strong> — สร้างคอมโพเนนต์ production จากสเปกนี้ อย่าแปลงต้นแบบเป็นโค้ด production โดยตรง</p>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:#c62810">CODEX ต้องไม่ทำสิ่งเหล่านี้</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(32,30,29,.2);border:1px solid rgba(32,30,29,.25);margin-top:9px">
+        <sc-for list="{{ codexWarnings }}" as="w" hint-placeholder-count="14">
+          <div style="background:#fff;padding:9px 12px;display:flex;gap:9px;align-items:flex-start">
+            <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">✕</span>
+            <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.8)">{{ w }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">11C</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">P0 acceptance checklist</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="8">
+        <div style="border:1px solid rgba(32,30,29,.4);border-top:3px solid {{ a.c }}">
+          <div style="padding:10px 13px;border-bottom:1px solid rgba(32,30,29,.25);font-weight:700;font-size:13.5px;color:{{ a.c }}">{{ a.title }}</div>
+          <div style="padding:12px 13px;display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ a.rows }}" as="r" hint-placeholder-count="6">
+              <div style="display:flex;gap:9px;align-items:flex-start">
+                <span style="flex:none;width:15px;height:15px;border:1px solid {{ a.c }};color:{{ a.c }};font-family:'IBM Plex Mono',monospace;font-size:10px;display:flex;align-items:center;justify-content:center;margin-top:2px">✓</span>
+                <span style="flex:1;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.78)">{{ r }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="padding:46px 0 0">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c62810">12</span>
+      <h2 style="margin:0;font-family:'Archivo';font-weight:800;font-size:30px;letter-spacing:-.02em">Change log · revision 2 → 2.1</h2>
+    </div>
+    <div style="border:1px solid rgba(32,30,29,.4);margin-bottom:22px">
+      <div style="display:grid;grid-template-columns:150px 1.2fr 1.5fr;background:#eae9e9;border-bottom:2px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">
+        <span style="padding:9px 10px">ส่วนที่เปลี่ยน</span><span style="padding:9px 10px">เดิม (rev 2)</span><span style="padding:9px 10px">ใหม่ (rev 2.1)</span>
+      </div>
+      <sc-for list="{{ changelog21 }}" as="c" hint-placeholder-count="16">
+        <div style="display:grid;grid-template-columns:150px 1.2fr 1.5fr;border-bottom:1px solid rgba(32,30,29,.16);align-items:start">
+          <span style="padding:10px;font-weight:700;font-size:12.5px">{{ c.area }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.58)">{{ c.was }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.82)">{{ c.now }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="width:22px;height:2px;background:rgba(32,30,29,.4);display:block"></span>
+      <h3 style="margin:0;font-family:'Archivo';font-weight:700;font-size:18px;color:rgba(32,30,29,.7)">Change log · revision 1 → 2</h3>
+    </div>
+    <div style="border:1px solid rgba(32,30,29,.4)">
+      <div style="display:grid;grid-template-columns:150px 1.2fr 1.5fr;background:#eae9e9;border-bottom:2px solid rgba(32,30,29,.4);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;color:rgba(32,30,29,.6)">
+        <span style="padding:9px 10px">ส่วนที่เปลี่ยน</span><span style="padding:9px 10px">เดิม</span><span style="padding:9px 10px">ใหม่</span>
+      </div>
+      <sc-for list="{{ changelog }}" as="c" hint-placeholder-count="14">
+        <div style="display:grid;grid-template-columns:150px 1.2fr 1.5fr;border-bottom:1px solid rgba(32,30,29,.16);align-items:start">
+          <span style="padding:10px;font-weight:700;font-size:12.5px">{{ c.area }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.58)">{{ c.was }}</span>
+          <span style="padding:10px;font-size:12.5px;line-height:1.55;color:rgba(32,30,29,.82)">{{ c.now }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <div style="margin-top:56px;background:#c62810;color:#f5f3f2;padding:38px 42px">
+    <h2 style="margin:0 0 12px;font-family:'Archivo';font-weight:800;font-size:34px;line-height:1.12;letter-spacing:-.025em;max-width:880px">ทุกค่าในต้นแบบนี้เป็นข้อมูลจำลองสำหรับการออกแบบ</h2>
+    <p style="margin:0;max-width:840px;font-size:14px;line-height:1.65;color:rgba(245,243,242,.92)">ไม่มีการเชื่อมต่อโบรกเกอร์จริง ไม่มีตรรกะการเทรดฝั่งเซิร์ฟเวอร์ และไม่มีการควบคุมบัญชีเงินจริง ระบบที่พัฒนาต่อต้องคงข้อจำกัดทั้งหมดไว้ DEMO ONLY, XAU/USD เท่านั้น, ปริมาณสูงสุดที่อนุญาต 0.01 lot, Position เปิดพร้อมกันไม่เกิน 1, ทุกคำสั่งต้องมี Stop Loss, ห้าม martingale ห้าม grid ห้ามถัวเฉลี่ย, Risk Engine ไม่สามารถถูกข้ามได้ และการส่งคำสั่งจากบัญชีเงินจริงถูกบล็อกถาวร</p>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280}}">
+const R='#c62810', OK='#0f7a5f', WARN='#8a5510', INFO='#1f5f8f', MUTE='rgba(32,30,29,.5)', INK='#201e1d';
+
+class Component extends DCLogic {
+  renderVals(){
+    const planes=[
+      {t:'React / TypeScript Dashboard',c:INFO,sub:'presentation + intent only',arrow:'→',
+       items:['อ่านข้อมูลผ่าน RLS ด้วย session ของผู้ใช้','สมัครรับเหตุการณ์ผ่าน Realtime Broadcast','ส่งเจตนาผ่าน Edge Function หรือ RPC','ไม่เขียนตารางปฏิบัติการที่ป้องกันไว้','ไม่ติดต่อ MT5 โดยตรงในทุกกรณี']},
+      {t:'Supabase — control plane',c:R,sub:'auth · postgres · realtime · edge functions · storage · cron',arrow:'→',
+       items:['เก็บสถานะทั้งหมดของระบบและนโยบายทุกเวอร์ชัน','ตรวจสิทธิ์ผู้ใช้และบันทึก audit log','แปลงเจตนาเป็นแถวใน system_commands','กระจายเหตุการณ์ให้ dashboard ผ่าน Broadcast','เก็บ snapshot แท่งเทียน และไฟล์ backtest','ไม่ตัดสินใจเทรดเอง']},
+      {t:'Windows Python MT5 Worker',c:OK,sub:'execution plane · WK-01',arrow:'',
+       items:['เชื่อมต่อ MT5 และยืนยันว่าเป็นบัญชี Demo','อ่าน symbol specification จากโบรกเกอร์','รับข้อมูลสด สร้าง feature รันกลยุทธ์ ตรวจ regime','Hard Risk Engine — ผู้ตัดสินสุดท้าย','order check และส่งคำสั่งไปยังบัญชี Demo','ติดตาม Position และตรวจความตรงกันกับฐานข้อมูล','ดูแล SL/TP ต่อแม้ dashboard หรือ LINE ล่ม','บังคับใช้ kill switch ในเครื่อง']}
+    ];
+
+    const forbidden=[
+      ['เพิ่มหรือแก้ไขคำสั่งโบรกเกอร์','broker_orders'],
+      ['เปลี่ยนสถานะคำสั่งเป็นดำเนินการแล้ว','broker_orders.status'],
+      ['แก้ไขบันทึกการส่งคำสั่ง','trade_executions'],
+      ['สร้างหรือแก้ไข Position','positions'],
+      ['แก้ไขผลการตรวจกฎความเสี่ยง','risk_checks'],
+      ['เปลี่ยนข้อเสนอที่ถูกระงับเป็นอนุมัติ','trade_proposals.status'],
+      ['เขียนทับนโยบายความเสี่ยงที่ใช้งานอยู่','risk_policies'],
+      ['ข้ามผลการตัดสินของ Risk Engine','—']
+    ].map(([t,tbl])=>({t,tbl}));
+
+    const intents=[
+      ['APPROVE_PROPOSAL','อนุมัติข้อเสนอ — Worker ตรวจกฎซ้ำก่อนส่งคำสั่งเสมอ'],
+      ['REJECT_PROPOSAL','ปฏิเสธข้อเสนอพร้อมเหตุผลที่บันทึกลง journal'],
+      ['PAUSE_NEW_TRADES','หยุดการเปิดไม้ใหม่ ไม่ปิด Position ที่เปิดอยู่'],
+      ['RESUME_SYSTEM','กลับมาทำงานหลังผ่านเช็กลิสต์ความปลอดภัย'],
+      ['REQUEST_POSITION_CLOSE','ขอปิด Position — Worker ตรวจสอบก่อนส่งคำสั่งปิด'],
+      ['REQUEST_STOP_LOSS_CHANGE','ขอแก้ Stop Loss — ค่าที่เพิ่มความเสี่ยงถูกปฏิเสธ'],
+      ['REQUEST_TAKE_PROFIT_CHANGE','ขอแก้ Take Profit — ต้องคง R/R ขั้นต่ำ'],
+      ['ACTIVATE_EMERGENCY_STOP','บันทึกคำขอหยุดฉุกเฉินแบบถาวร แล้วรอ Windows Worker ยืนยันว่าปิดการเปิด Order ใหม่ในเครื่องแล้ว'],
+      ['REQUEST_RISK_POLICY_CHANGE','ขอเปลี่ยนนโยบาย — สร้างเวอร์ชันใหม่ ไม่แก้ของเดิม']
+    ].map(([k,d])=>({k,d}));
+
+    const closeFlow=[
+      ['01','ผู้ใช้ส่งคำขอปิด Position','UI แสดง “ส่งคำขอแล้ว” ไม่ใช่ “ปิดแล้ว”',INFO,'→'],
+      ['02','ระบบรับคำขอ','บันทึกลง system_commands พร้อม idempotency key',INFO,'→'],
+      ['03','Worker ตรวจสอบ Position','เทียบฐานข้อมูลกับข้อมูลจริงที่โบรกเกอร์',WARN,'→'],
+      ['04','ส่งคำสั่งปิดไปยังโบรกเกอร์','หลังผ่าน order check',WARN,'→'],
+      ['05','โบรกเกอร์ยืนยันว่าปิดแล้ว','จึงเปลี่ยนสถานะเป็นปิดและบันทึก journal',OK,'']
+    ].map(([n,t,s,c,arrow])=>({n,t,s,c,arrow}));
+
+    const P=(p)=>p==='P0'?R:(p==='P1'?WARN:MUTE);
+    const screenMap=[
+      ['P0','ยืนยันบัญชี Demo','/setup/verify','trading_accounts · broker_symbols','ไม่มี — บล็อกถาวรเมื่อพบบัญชีจริง','system_heartbeats'],
+      ['P0','การตั้งค่าเริ่มต้น','/setup','trading_accounts · broker_symbols · system_components','ไม่มี — อ่านอย่างเดียว จนกว่าจะยืนยัน Demo','system_heartbeats'],
+      ['P0','Global Shell','ทุกหน้า','trading_modes · system_heartbeats · market_snapshots','PAUSE_NEW_TRADES · RESUME_SYSTEM · ACTIVATE_EMERGENCY_STOP','system_heartbeats · system_commands'],
+      ['P0','ภาพรวม (Dashboard)','/dashboard','market_snapshots · trade_proposals · positions · risk_policies · system_heartbeats · system_incidents','ผ่าน Global Shell เท่านั้น','market snapshot · proposals · positions · incidents'],
+      ['P0','ข้อเสนอการเทรด','/proposals/:id','trade_proposals · risk_checks · strategy_runs · market_regimes · model_versions','APPROVE_PROPOSAL · REJECT_PROPOSAL','trade_proposals · system_commands'],
+      ['P0','Mobile Approval','/m/approve/:token','trade_proposal เดียว + risk_checks (ผ่าน token validation)','APPROVE_PROPOSAL · REJECT_PROPOSAL','system_commands · broker_orders'],
+      ['P0','Position','/position','positions · position_events · broker_orders · trade_executions','REQUEST_POSITION_CLOSE · REQUEST_STOP_LOSS_CHANGE · REQUEST_TAKE_PROFIT_CHANGE','positions · position_events'],
+      ['P0','Risk Center','/risk','risk_policies · audit_logs · daily_performance','REQUEST_RISK_POLICY_CHANGE','system_commands'],
+      ['P0','สถานะระบบ','/health','system_components · system_heartbeats · system_incidents','ไม่มี','system_heartbeats · system_incidents'],
+      ['P0','บันทึกการเทรด','/journal','trade_journal · trade_decisions · broker_orders','user_notes (เขียนได้โดยตรง)','trade_journal'],
+      ['P1','ตลาดสด','/market','market_candles · market_snapshots · economic_events · market_regimes','ไม่มี','live market snapshot'],
+      ['P2','วิเคราะห์ผล','/analytics','daily_performance · strategy_performance · model_evaluations','ไม่มี','ไม่ subscribe']
+    ].map(([pri,th,route,reads,sends,rt])=>({pri,th,route,reads,sends,rt,pc:P(pri),
+      sendsC:sends.indexOf('ไม่มี')===0?'rgba(32,30,29,.5)':OK}));
+
+    const authModel=[
+      'ผู้ใช้เพียงคนเดียวในเวอร์ชันแรก · Supabase Auth เป็นผู้ถือ session',
+      'เปิด Row Level Security ทุกตาราง ไม่มีข้อยกเว้น',
+      'ห้ามใส่ service-role key หรือ secret ใด ๆ ในเบราว์เซอร์',
+      'ต้องมี session ที่ถูกต้องจึงเข้าหน้าแดชบอร์ดได้',
+      'ลิงก์อนุมัติบนมือถือใช้โทเคนใช้ครั้งเดียวที่ลงลายเซ็น ตรวจสอบ proposal_id, nonce, expires_at และผู้ใช้ปลายทาง',
+      'ห้ามเชื่อค่าการเทรดที่ฝังมากับ URL — ทุกค่าดึงจากเซิร์ฟเวอร์',
+      'Worker ใช้ Dedicated Worker Credential แบบสิทธิ์น้อยที่สุด แยกจาก publishable key ของ frontend และจาก session ของผู้ใช้ หมุนและเพิกถอนได้อิสระ · ห้ามปรากฏในโค้ดเบราว์เซอร์ Git log หรือ prompt ของ Claude/Codex',
+      'ปุ่มอนุมัติถูกปิดถาวรทันทีหลังส่งสำเร็จหนึ่งครั้ง กันการกดซ้ำ webhook ซ้ำ และการรีเฟรชหน้า'
+    ];
+
+    const realtime=[
+      ['broadcast:market_snapshot','ภาพรวม · ตลาดสด · Mobile Approval — snapshot ที่ throttle 0.5–1 วินาที'],
+      ['postgres_changes:trade_proposals','ภาพรวม · ข้อเสนอ · Mobile Approval'],
+      ['postgres_changes:positions','ภาพรวม · Position'],
+      ['postgres_changes:position_events','Position — ไทม์ไลน์'],
+      ['postgres_changes:system_heartbeats','Global Shell · สถานะระบบ'],
+      ['postgres_changes:system_incidents','Global Shell · สถานะระบบ'],
+      ['postgres_changes:system_commands','ทุกหน้าที่ส่งคำสั่ง — ใช้ขับ command timeline']
+    ].map(([ch,who])=>({ch,who}));
+
+    const rls=[
+      ['trade_proposals','อ่านได้','ไม่ได้','เขียนได้'],
+      ['risk_checks','อ่านได้','ไม่ได้','เขียนได้'],
+      ['trade_decisions','อ่านได้','ผ่าน secured action','อ่านได้'],
+      ['system_commands','อ่านได้','ผ่าน secured action','อ่าน จับจอง และอัปเดตสถานะ'],
+      ['broker_orders','อ่านได้','ไม่ได้','เขียนได้'],
+      ['trade_executions','อ่านได้','ไม่ได้','เขียนได้'],
+      ['positions','อ่านได้','ไม่ได้','เขียนได้'],
+      ['position_events','อ่านได้','ไม่ได้','เขียนได้'],
+      ['risk_policies','อ่านได้','ผ่านคำขอเปลี่ยนแปลงที่ป้องกันไว้','อ่านได้'],
+      ['system_incidents','อ่านได้','ไม่ได้','เขียนได้'],
+      ['system_heartbeats','อ่านได้','ไม่ได้','เขียนได้'],
+      ['market_snapshots','อ่านได้','ไม่ได้','เขียนได้'],
+      ['trade_journal','อ่านได้','ไม่ได้','เขียนได้'],
+      ['user_notes','อ่านได้','เขียนได้โดยตรงภายใต้ RLS','อ่านได้'],
+      ['audit_logs','อ่านได้','ไม่ได้ (append จากเซิร์ฟเวอร์)','append เท่านั้น']
+    ].map(([res,read,write,worker])=>({res,read:read==='อ่านได้'?'YES':'NO',write,worker,
+      wc:write==='ไม่ได้'?R:(write.indexOf('secured')>=0?WARN:OK)}));
+
+    const contracts=[
+      ['approve-proposal','edge function · user session or validated approval session','proposal_id, proposal_version, approval_session_id, idempotency_key','บันทึก decision แล้วรอ Worker','สร้าง system_command และคืน command_id','โทเคนหมดอายุ · ราคาเคลื่อนเกิน tolerance · กฎเปลี่ยน · อนุมัติไปแล้ว'],
+      ['reject-proposal','edge function · user session required','proposal_id, reason, idempotency_key','บันทึกทันที','ข้อเสนอเปลี่ยนเป็น rejected','ข้อเสนอถูกดำเนินการไปแล้ว · หมดอายุ'],
+      ['pause-system','rpc · user session required','reason (optional), idempotency_key','รอ Worker ยืนยัน','โหมดเปลี่ยนเป็น paused','Worker ไม่ตอบภายใน 10 วินาที'],
+      ['resume-system','rpc · user session required','checklist_ack, idempotency_key','ตรวจเช็กลิสต์ฝั่งเซิร์ฟเวอร์','กลับมาที่โหมดจำลองเสมอ','เช็กลิสต์ไม่ผ่าน · พบบัญชีเงินจริง'],
+      ['activate-emergency-stop','rpc · user session required','reason, idempotency_key','CONTROL_PLANE_RECORDED — บันทึกคำขอถาวรแล้ว รอ Worker ยืนยัน','WORKER_RECEIVED → LOCAL_EXECUTION_DISABLED → CONFIRMED (Worker ยืนยันว่าปิดการเปิด Order ใหม่แล้ว)','CONTROL_PLANE_UNAVAILABLE · WORKER_NOT_REACHABLE · WORKER_ACK_TIMEOUT · LOCAL_STATE_UNCONFIRMED · FAILED · คำสั่งหมดอายุ'],
+      ['request-position-close','edge function · user session required','position_id, expected_position_version, reason, idempotency_key','Worker กำลังตรวจสอบ','โบรกเกอร์ยืนยันการปิด','Position ไม่ตรงกัน · MT5 หลุด · โบรกเกอร์ปฏิเสธ'],
+      ['request-position-modification','edge function · user session required','position_id, expected_position_version, new_sl?, new_tp?, idempotency_key','รอ Worker ยืนยันกับโบรกเกอร์','ค่าใหม่ยืนยันที่โบรกเกอร์แล้ว','ค่าที่ขอเพิ่มความเสี่ยง · ต่ำกว่า stop level · R/R ต่ำกว่าขั้นต่ำ'],
+      ['request-risk-policy-change','edge function · user session required','rule_key, new_value, reason, idempotency_key','สร้างเวอร์ชันใหม่ รอ Worker รับ','Worker ยืนยันใช้นโยบายเวอร์ชันใหม่','เหตุผลว่าง · ค่าเกินเพดานระบบ · ไม่ได้ยืนยันสองครั้งสำหรับการเพิ่มความเสี่ยง'],
+      ['validate-mobile-approval-token','edge function · LINE LIFF identity + signed one-time token','liff_id_token, approval_token, nonce','ตรวจ LIFF identity → allowlist → ลายเซ็นโทเคน → อายุ → ยังไม่ถูกใช้ → เจ้าของข้อเสนอ → เวอร์ชันข้อเสนอ','สร้าง MobileApprovalSession สถานะ validated และคืนข้อเสนอฉบับจริงจากฐานข้อมูล','LINE identity ไม่ผ่าน · ผู้ใช้ไม่อยู่ใน allowlist · โทเคนไม่ถูกต้อง/หมดอายุ/ถูกใช้แล้ว/ถูกเพิกถอน · เวอร์ชันข้อเสนอไม่ตรง · ข้อเสนอถูกดำเนินการแล้ว']
+    ].map(([name,auth,input,pending,success,failure])=>({name,auth,input,pending,success,failure}));
+
+    const sizingFlow=[
+      ['01','กำหนดราคาเข้า',INK,'→'],['02','กำหนด SL จากโครงสร้างราคาหรือความผันผวน',INK,'→'],
+      ['03','คำนวณระยะ Stop',INK,'→'],['04','คำนวณขาดทุนสูงสุดจากงบความเสี่ยง',INK,'→'],
+      ['05','คำนวณปริมาณที่อนุญาต',INFO,'→'],['06','ปัดตาม volume step ของโบรกเกอร์',INFO,'→'],
+      ['07','จำกัดไม่ให้เกิน 0.01',WARN,'→'],['08','ถ้าขั้นต่ำยังเกินงบ = BLOCK',R,'']
+    ].map(([n,t,c,arrow])=>({n,t,c,arrow}));
+
+    const sizingFields=[
+      ['ปริมาณที่คำนวณได้','calculatedLot'],['ปริมาณขั้นต่ำของโบรกเกอร์','brokerMinimumLot'],
+      ['ขั้นของปริมาณ','brokerVolumeStep'],['ปริมาณสูงสุดที่อนุญาต','maximumPermittedLot'],
+      ['ปริมาณที่เสนอจริง','requestedLot'],['จำนวนเงินความเสี่ยง','riskAmount'],
+      ['เปอร์เซ็นต์ความเสี่ยง','riskPct'],['ระยะ Stop','stopDistancePoints'],
+      ['เหตุผลของการปรับปริมาณ','volumeAdjustmentReason']
+    ].map(([th,en])=>({th,en}));
+
+    const minlotCase=[
+      {k:'ปริมาณที่คำนวณได้',v:'0.0045',c:R},{k:'ปริมาณขั้นต่ำของโบรกเกอร์',v:'0.01',c:INK},
+      {k:'ปริมาณสูงสุดที่อนุญาต',v:'0.01',c:INK},{k:'ขาดทุนที่ปริมาณขั้นต่ำ',v:'5.50 USD',c:R},{k:'งบความเสี่ยง',v:'2.50 USD',c:INK},{k:'ผลลัพธ์',v:'BLOCKED',c:R}
+    ];
+
+    const eligKeys=[
+      ['strategyPolicyPassed','สัญญาณตรงตามนิยามของกลยุทธ์ที่มีเวอร์ชันกำกับ'],
+      ['regimeEligibilityPassed','สภาวะตลาดอยู่ในกลุ่มที่กลยุทธ์นี้ได้รับอนุญาต'],
+      ['calibratedProbabilityPassed','ผ่านเกณฑ์ความน่าจะเป็นเฉพาะเมื่อโมเดลสอบเทียบแล้วเท่านั้น'],
+      ['minimumSampleSizePassed','มีตัวอย่างในสภาวะใกล้เคียงไม่น้อยกว่าเกณฑ์'],
+      ['dataQualityPassed','ข้อมูลตลาดสดและครบถ้วนตามเกณฑ์'],
+      ['hardRiskChecksPassed','กฎความเสี่ยงแบบ Hard ผ่านครบทุกข้อ']
+    ].map(([k,d])=>({k,d}));
+
+    const okLabels=['คะแนนคุณภาพสัญญาณ','ความน่าเชื่อถือจากข้อมูลย้อนหลัง','จำนวนตัวอย่างในสภาวะใกล้เคียง','คุณภาพข้อมูล','สถานะการสอบเทียบโมเดล','ยังไม่มีข้อมูลเพียงพอ'];
+    const badLabels=['AI Confidence: 82%','โอกาสชนะ 82%','ความมั่นใจของโมเดล 4/5 ดาว','คาดว่าจะได้กำไร 24 USD'];
+    const safePresent=[
+      {k:'คะแนนคุณภาพสัญญาณ',v:'82 / 100',c:INK},
+      {k:'จำนวนตัวอย่างใกล้เคียง',v:'46',c:INK},
+      {k:'สถานะการสอบเทียบ',v:'ยังไม่ผ่านการสอบเทียบ',c:WARN}
+    ];
+
+    const queueFlow=[
+      ['01','Frontend เรียก secured action',INFO,'→'],['02','เพิ่มคำสั่งลงตารางถาวร',INFO,'→'],
+      ['03','PostgreSQL commit สำเร็จ',R,'→'],['04','Realtime ปลุก Worker',R,'→'],
+      ['05','Worker query คำสั่งที่ค้าง',OK,'→'],['06','Worker จับจองแบบ atomic (lease)',OK,'→'],
+      ['07','Worker ตรวจสถานะปัจจุบัน',OK,'→'],['08','ดำเนินการหรือปฏิเสธ',OK,'→'],
+      ['09','เขียนผลลัพธ์ของคำสั่ง',OK,'']
+    ].map(([n,t,c,arrow])=>({n,t,c,arrow}));
+    const recoverAfter=['Realtime หลุดการเชื่อมต่อ','Worker รีสตาร์ต','เครือข่ายล้มเหลวชั่วคราว','Supabase เชื่อมต่อกลับ','Dashboard รีสตาร์ต'];
+    const reconnectOrder=[
+      ['1','ดึงสถานะจริงจากฐานข้อมูลก่อน'],['2','กระทบยอดคำสั่งที่ยังค้าง'],
+      ['3','กระทบยอด Position กับโบรกเกอร์'],['4','จึงเริ่มสมัครรับ Realtime ใหม่']
+    ].map(([n,t])=>({n,t}));
+
+    const estopStates=[
+      ['01','IDLE','ยังไม่มีคำสั่ง',MUTE],
+      ['02','REQUESTED','ผู้ใช้ยืนยันแล้ว ส่งคำขอออกไป',WARN],
+      ['03','CONTROL_PLANE_RECORDED','Control Plane บันทึกคำขอสำเร็จ',WARN],
+      ['04','WORKER_RECEIVED','Worker ยืนยันรับคำสั่งแล้ว',INFO],
+      ['05','LOCAL_EXECUTION_DISABLED','Worker ปิดการเปิด Order ใหม่ในเครื่อง',INFO],
+      ['06','CONFIRMED','ยืนยันแล้ว · Position เดิมยังอยู่ใต้ SL/TP',OK]
+    ].map(([n,k,d,c])=>({n,k,d,c}));
+    const estopFail=[
+      ['CONTROL_PLANE_UNAVAILABLE','ติดต่อ Supabase ไม่ได้ · ต้องแนะนำให้ใช้ Local Emergency Stop ทันที'],
+      ['WORKER_NOT_REACHABLE','บันทึกคำขอแล้วแต่ Worker offline'],
+      ['WORKER_ACK_TIMEOUT','Worker ไม่ตอบรับภายในเวลาที่กำหนด (10 วินาที)'],
+      ['LOCAL_STATE_UNCONFIRMED','ไม่ทราบว่า Worker ปิดการเปิด Order แล้วหรือยัง — สถานะวิกฤต'],
+      ['FAILED','คำสั่งล้มเหลวและต้องดำเนินการด้วยมือ']
+    ].map(([k,d])=>({k,d}));
+    const estopActions=[
+      ['1','เปิด Windows Execution Node'],['2','ตรวจสอบสถานะ Aurum Worker'],
+      ['3','ปิด AutoTrading ใน MetaTrader 5'],['4','ใช้ Local Emergency Stop'],['5','ตรวจสอบ Position ที่เปิดอยู่']
+    ].map(([n,t])=>({n,t}));
+    const localSafety=[
+      'Aurum Worker Tray Application พร้อมปุ่ม Local Emergency Stop',
+      'คำสั่ง CLI: aurum-worker emergency-stop',
+      'สถานะหยุดฉุกเฉินในเครื่องถูกเขียนลงดิสก์ และคงอยู่แม้ Worker รีสตาร์ต',
+      'Local Emergency Stop ทำงานได้แม้ Supabase ใช้งานไม่ได้'
+    ];
+
+    const SR=(k,en,v,c)=>({k,en,v,c});
+    const sizingExamples=[
+      {title:'กรณีปกติ · PASS',result:'REQUESTED 0.01',c:OK,bg:'rgba(15,122,95,.07)',
+       note:'ปริมาณที่คำนวณได้เท่ากับ 0.01 พอดี ขาดทุนที่ SL เท่ากับงบความเสี่ยง 5.50 USD ซึ่งเป็น 0.25% ของพอร์ตตามเพดาน',
+       rows:[SR('ยอดเงินในบัญชี','account equity','2,200.00 USD',INK),
+        SR('ความเสี่ยงสูงสุดต่อไม้','risk limit','0.25 %',INK),
+        SR('งบความเสี่ยง','risk budget','5.50 USD',INK),
+        SR('ราคาเข้า','entry','2,410.40',INK),
+        SR('จุดตัดขาดทุน','stop loss','2,404.90',R),
+        SR('ระยะราคา','price distance','5.50 USD',INK),
+        SR('ขนาดสัญญา','contract size','100 oz / 1.00 lot',INK),
+        SR('ปริมาณขั้นต่ำ','broker minimum lot','0.01',INK),
+        SR('ขั้นของปริมาณ','broker volume step','0.01',INK),
+        SR('ปริมาณสูงสุดที่อนุญาต','maximum permitted lot','0.01',WARN),
+        SR('ปริมาณที่คำนวณได้','calculated lot','0.01',OK),
+        SR('ปริมาณที่เสนอ','requested lot','0.01',OK),
+        SR('ขาดทุนประเมินที่ SL','estimated loss at stop','5.50 USD',INK),
+        SR('ความเสี่ยงจริงต่อพอร์ต','actual risk','0.25 %',OK),
+        SR('แหล่งการคำนวณ','calculation source','mt5_order_calc_profit',MUTE)]},
+      {title:'กรณีถูกระงับ · BLOCK',result:'BLOCKED',c:R,bg:'rgba(198,40,16,.07)',
+       note:'ปริมาณขั้นต่ำของโบรกเกอร์ทำให้ความเสี่ยงสูงกว่าเพดานที่กำหนด ระบบจะไม่ลดระยะ Stop Loss เพื่อบังคับให้ Trade นี้ผ่าน',
+       rows:[SR('ยอดเงินในบัญชี','account equity','1,000.00 USD',INK),
+        SR('ความเสี่ยงสูงสุดต่อไม้','risk limit','0.25 %',INK),
+        SR('งบความเสี่ยง','risk budget','2.50 USD',INK),
+        SR('ราคาเข้า','entry','2,410.40',INK),
+        SR('จุดตัดขาดทุน','stop loss','2,404.90',R),
+        SR('ระยะราคา','price distance','5.50 USD',INK),
+        SR('ปริมาณที่คำนวณได้','calculated lot','0.0045',R),
+        SR('ปริมาณขั้นต่ำ','broker minimum lot','0.01',INK),
+        SR('ขาดทุนที่ปริมาณขั้นต่ำ','estimated loss at min lot','5.50 USD',R),
+        SR('ขาดทุนสูงสุดที่ยอมรับ','maximum allowed loss','2.50 USD',INK),
+        SR('ความเสี่ยงจริงถ้าส่ง','actual risk if executed','0.55 %',R),
+        SR('ผลลัพธ์','result','BLOCKED',R)]}
+    ];
+
+    const liffFlow=[
+      ['01','แจ้งเตือนผ่าน LINE',INFO,'→'],['02','เปิดหน้า LIFF',INFO,'→'],
+      ['03','ตรวจโทเคนที่ลงลายเซ็น',R,'→'],['04','ตรวจว่าโทเคนยังไม่หมดอายุ',R,'→'],
+      ['05','ตรวจว่าโทเคนยังไม่ถูกใช้',R,'→'],['06','ยืนยันตัวตน LINE',R,'→'],
+      ['07','ตรวจว่าอยู่ในรายชื่อที่อนุญาต',R,'→'],['08','ตรวจว่าข้อเสนอเป็นของผู้ใช้นี้',WARN,'→'],
+      ['09','ดึงข้อเสนอจาก Supabase',OK,'→'],['10','ดึงราคาและความเสี่ยงล่าสุด',OK,'']
+    ].map(([n,t,c,arrow])=>({n,t,c,arrow}));
+    const tokenProps=['Opaque — ไม่มีข้อมูลการเทรดอยู่ในตัวโทเคน','อายุสั้น','ใช้ได้ครั้งเดียว','ผูกกับข้อเสนอหนึ่งรายการ','ผูกกับเวอร์ชันของข้อเสนอ','ผูกกับผู้ใช้ที่อนุญาต','เพิกถอนได้','เก็บเป็น hash ในฐานข้อมูล'];
+    const mobileStates=[
+      ['กำลังยืนยันตัวตน LINE',INFO],['กำลังตรวจสอบลิงก์อนุมัติ',INFO],['กำลังโหลดข้อเสนอปัจจุบัน',INFO],
+      ['LINE user ไม่ได้รับอนุญาต',R],['โทเคนไม่ถูกต้อง',R],['โทเคนหมดอายุ',R],['โทเคนถูกใช้ไปแล้ว',R],
+      ['เวอร์ชันข้อเสนอเปลี่ยน',WARN],['ข้อเสนอถูกดำเนินการไปแล้ว',WARN],
+      ['ระบบหยุดการเปิดไม้ใหม่',WARN],['หยุดระบบฉุกเฉินทำงานอยู่',R]
+    ].map(([t,c])=>({t,c}));
+
+    const workerCred=[
+      'แยกจาก publishable key ของ frontend',
+      'แยกจาก session ของผู้ใช้ที่ยืนยันตัวตนแล้ว',
+      'ใช้โดย Windows MT5 Worker เท่านั้น',
+      'หมุนและเพิกถอนได้อิสระจากคีย์อื่น',
+      'เข้าถึงได้เฉพาะการทำงานที่ Worker ต้องใช้',
+      'ต้องไม่ปรากฏในโค้ดเบราว์เซอร์',
+      'ต้องไม่ถูกเก็บใน Git',
+      'ต้องไม่ปรากฏใน log',
+      'ต้องไม่อยู่ใน prompt ของ Claude หรือ Codex',
+      'ต้องไม่เปิดเผยข้อมูลผู้ใช้หรือข้อมูลระบบที่ไม่เกี่ยวข้อง'
+    ];
+    const neverInBrowser=['Supabase secret key','Supabase service-role key','Worker credential','MT5 login','MT5 password','MT5 server credential','LINE channel secret','LINE access token'];
+
+    const schema=`// ── Prototype scenario ids — the simulator's authoritative key set (development only)
+
+type PrototypeScenarioId =
+  | 'no_signal'
+  | 'wait'
+  | 'auto_eligible'
+  | 'human_approval'
+  | 'blocked'
+  | 'proposal_expired'
+  | 'approval_recorded'
+  | 'revalidation_failed'
+  | 'order_pending'
+  | 'order_rejected'
+  | 'position_open'
+  | 'position_closed'
+  | 'mt5_disconnected'
+  | 'market_data_stale'
+  | 'daily_loss_limit'
+  | 'emergency_stop_requested'
+  | 'emergency_stop_confirmed'
+  | 'emergency_stop_unconfirmed'
+  | 'live_account_detected'
+  | 'minimum_lot_exceeds_risk';
+
+// ── Core enums
+
+type Mode = 'shadow' | 'human_approval' | 'conditional_auto';
+type SystemState = 'running' | 'paused' | 'emergency_stop' | 'recovering';
+type Verdict = 'AUTO' | 'ASK' | 'BLOCK';
+type MarketRegime = 'trending' | 'range' | 'high_volatility' | 'news_risk';
+
+// ── Durable command queue
+// Realtime only WAKES the worker. This table is the queue.
+
+type SystemCommandPayloadMap = {
+  APPROVE_PROPOSAL: {
+    proposalId: string;
+    proposalVersion: number;
+    approvalSessionId?: string;      // required for mobile LIFF approvals
+  };
+
+  REJECT_PROPOSAL: {
+    proposalId: string;
+    proposalVersion: number;
+    reason: string;
+  };
+
+  PAUSE_NEW_TRADES: {
+    reason?: string;
+  };
+
+  RESUME_SYSTEM: {
+    checklistAcknowledgementId: string;
+  };
+
+  ACTIVATE_EMERGENCY_STOP: {
+    reason: string;
+  };
+
+  REQUEST_POSITION_CLOSE: {
+    positionId: string;
+    expectedPositionVersion: number;
+    reason: string;
+  };
+
+  REQUEST_STOP_LOSS_CHANGE: {
+    positionId: string;
+    expectedPositionVersion: number;
+    newStopLoss: number;
+  };
+
+  REQUEST_TAKE_PROFIT_CHANGE: {
+    positionId: string;
+    expectedPositionVersion: number;
+    newTakeProfit: number;
+  };
+
+  REQUEST_RISK_POLICY_CHANGE: {
+    ruleKey: string;
+    newValue: number;
+    reason: string;
+  };
+};
+
+type SystemCommandType = keyof SystemCommandPayloadMap;
+
+type SystemCommandStatus =
+  | 'pending'
+  | 'claimed'
+  | 'validating'
+  | 'executing'
+  | 'succeeded'
+  | 'rejected'
+  | 'failed'
+  | 'expired'
+  | 'cancelled';
+
+type SystemCommand<T extends SystemCommandType = SystemCommandType> = {
+  id: string;
+  type: T;
+  payload: SystemCommandPayloadMap[T];
+  status: SystemCommandStatus;
+
+  requestedBy: string;
+  requestedAt: string;
+
+  targetResourceType?: string;
+  targetResourceId?: string;
+  expectedResourceVersion?: number;
+
+  idempotencyKey: string;
+
+  claimedAt?: string;
+  claimedBy?: string;
+  leaseExpiresAt?: string;
+
+  attemptCount: number;
+  nextRetryAt?: string;
+  expiresAt: string;
+
+  completedAt?: string;
+  resultCode?: string;
+  resultMessage?: string;
+  lastError?: string;
+};
+
+// Storage: payload may be a jsonb column, but the Worker MUST validate it
+// per command type before acting — Zod on the TypeScript side, Pydantic in the
+// Python Worker. An unvalidated arbitrary payload must never reach execution.
+
+// ── Emergency stop: control-plane result and worker result are separate
+
+type EmergencyStopControlPlaneState =
+  | 'REQUESTED'
+  | 'CONTROL_PLANE_RECORDED'
+  | 'CONTROL_PLANE_UNAVAILABLE';
+
+type EmergencyStopWorkerState =
+  | 'WORKER_RECEIVED'
+  | 'LOCAL_EXECUTION_DISABLED'
+  | 'CONFIRMED'
+  | 'WORKER_NOT_REACHABLE'
+  | 'WORKER_ACK_TIMEOUT'
+  | 'LOCAL_STATE_UNCONFIRMED'
+  | 'FAILED';
+
+type EmergencyStopState = {
+  commandId: string;
+  controlPlane: EmergencyStopControlPlaneState;
+  worker: EmergencyStopWorkerState | null;   // null = ยังไม่ได้ยินจาก worker
+  localKillSwitchEngaged: boolean | null;    // null = ไม่ทราบสถานะ
+  requestedAt: string;
+  workerAckAt?: string;
+  ackDeadlineAt: string;
+};
+
+// ── Eligibility policy replaces every hard-coded score threshold
+
+type EligibilityCheckKey =
+  | 'strategy_policy'
+  | 'regime_eligibility'
+  | 'minimum_sample_size'
+  | 'data_quality'
+  | 'calibration_requirement'
+  | 'hard_risk_validation'
+  | 'execution_environment';
+
+type EligibilityCheckState = 'pass' | 'warn' | 'fail' | 'not_required';
+
+type EligibilityCheck = {
+  key: EligibilityCheckKey;
+  labelTh: string;
+  state: EligibilityCheckState;
+  actualValue?: string | number;
+  requiredValue?: string | number;
+  explanation?: string;
+};
+
+type EligibilityPolicyResult = {
+  policyId: string;          // 'demo-auto-policy'
+  policyVersion: string;     // 'v1.0.4'
+  outcome: 'auto' | 'ask' | 'block';
+  evaluatedAt: string;
+  checks: EligibilityCheck[];
+};
+
+// ── Signal evidence is supporting information only, never a permission
+
+type SignalEvidence = {
+  qualityScore: number | null;
+  calibratedProbability: number | null;   // null unless calibrated AND valid
+  calibrationStatus:
+    | 'not_calibrated'
+    | 'insufficient_data'
+    | 'calibrated'
+    | 'out_of_date';
+  similarSampleCount: number;
+  minimumRequiredSampleCount: number;
+  strategyVersion: string;
+  modelVersion?: string;
+};
+
+// ── Broker specification: read from MT5, never hard-coded
+
+type BrokerSymbolSpecification = {
+  canonicalSymbol: 'XAUUSD';
+  brokerSymbol: string;
+  specificationVersion: string;
+  accountCurrency: string;
+
+  contractSize: number;
+  digits: number;
+  pointSize: number;
+  tickSize: number;
+  tickValue: number | null;
+
+  minimumVolume: number;
+  maximumVolume: number;
+  volumeStep: number;
+
+  stopLevel: number;
+  calculationMode: string;
+  fetchedAt: string;
+};
+
+// ── Position sizing
+
+type PositionSizingResult = {
+  entryPrice: number;
+  stopLossPrice: number;
+  stopDistancePrice: number;
+  stopDistancePoints: number;
+
+  accountEquity: number;
+  riskLimitPct: number;
+  riskBudgetAmount: number;
+
+  calculatedVolume: number;
+  brokerMinimumVolume: number;
+  brokerVolumeStep: number;
+  maximumPermittedVolume: number;   // 0.01 in demo v1 — a ceiling, not a default
+
+  requestedVolume: number | null;   // null when blocked
+  approvedVolume: number | null;
+
+  estimatedLossAtStop: number;
+  actualRiskPct: number;
+  unusedRiskCapacity: number;
+
+  calculationSource:
+    | 'mt5_order_calc_profit'
+    | 'broker_tick_value'
+    | 'simulation';
+
+  result: 'pass' | 'block';
+  blockReason?:
+    | 'BROKER_MINIMUM_VOLUME_EXCEEDS_RISK'
+    | 'PRICE_MOVED_BEYOND_TOLERANCE'
+    | string;
+};
+
+// ── Trade proposal, bound to account, symbol and version
+
+type TradeProposal = {
+  id: string;
+  proposalVersion: number;
+
+  userId: string;
+  tradingAccountId: string;
+
+  accountType: 'demo';
+  accountCurrency: string;
+  brokerServer: string;
+
+  canonicalSymbol: 'XAUUSD';
+  brokerSymbol: string;
+  symbolSpecificationVersion: string;
+
+  direction: 'BUY' | 'SELL';
+
+  strategyCode: string;
+  strategyVersion: string;
+  modelVersion?: string;
+  eligibilityPolicyVersion: string;
+  riskPolicyVersion: string;
+
+  entryPrice: number;
+  stopLossPrice: number;
+  takeProfitPrice: number;
+
+  calculatedVolume: number;
+  requestedVolume: number | null;
+  approvedVolume: number | null;
+  maximumPermittedVolume: number;
+
+  riskAmount: number;
+  riskPct: number;
+  riskReward: number;
+
+  marketSnapshotId: string;
+  featureSnapshotId: string;
+  decisionTraceId: string;
+
+  status:
+    | 'candidate'
+    | 'validated'
+    | 'pending_approval'
+    | 'approved'
+    | 'rejected'
+    | 'blocked'
+    | 'expired'
+    | 'execution_pending'
+    | 'executed'
+    | 'failed';
+
+  createdAt: string;
+  expiresAt: string;      // enforced server-side; the UI countdown is display only
+  processedAt?: string;
+};
+
+// ── Risk validation: totals are always derived from this array
+
+type RiskCheckState = 'pass' | 'warn' | 'fail' | 'na';
+
+type RiskCheck = {
+  key: string;
+  labelTh: string;
+  labelEn: string;
+  state: RiskCheckState;
+  actual: string;
+  limit?: string;
+  hard: boolean;
+};
+
+// const totalChecks   = checks.length;
+// const passedChecks  = checks.filter(c => c.state === 'pass').length;
+// const warnedChecks  = checks.filter(c => c.state === 'warn').length;
+// const failedChecks  = checks.filter(c => c.state === 'fail').length;
+
+// ── Mobile approval: LIFF identity + single-use token
+
+type MobileApprovalSessionStatus =
+  | 'created'
+  | 'validated'
+  | 'used'
+  | 'expired'
+  | 'revoked';
+
+type MobileApprovalSession = {
+  id: string;
+  proposalId: string;
+  proposalVersion: number;
+  allowedUserId: string;      // LINE user id on the allowlist
+  tokenHash: string;          // hash only — never the raw token
+  nonce: string;
+  status: MobileApprovalSessionStatus;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string;
+};
+
+// ── Provenance
+
+type DecisionProvenance = {
+  strategyVersion: string;
+  modelVersion?: string;
+  riskPolicyVersion: string;
+  eligibilityPolicyVersion: string;
+  marketDataProvider: string;
+  economicEventProvider?: string;
+  marketSnapshotId: string;
+  featureSnapshotId: string;
+  decisionTraceId: string;
+  workerId: string;
+  marketDataUpdatedAt: string;
+  evaluatedAt: string;
+};
+
+// ── Market snapshot
+
+type MarketSnapshot = {
+  bid: number;
+  ask: number;
+  spreadPoints: number;
+  session: 'asia' | 'london' | 'newyork' | 'overlap';
+  regime: MarketRegime;
+  atr: number;
+  freshness: 'live' | 'delayed' | 'stale';
+  ageMs: number;
+  transport: 'realtime_broadcast' | 'database_fallback';
+  snapshotId: string;
+  capturedAt: string;
+};
+
+// ── Position and journal
+
+type Position = {
+  id: string;
+  positionVersion: number;    // required by every modification command
+  direction: 'BUY' | 'SELL';
+  volume: number;
+  entry: number;
+  current: number;
+  stopLoss: number;
+  takeProfit: number;
+  unrealizedPnl: number;
+  rMultiple: number;
+  status: 'open' | 'close_requested' | 'closing' | 'closed' | 'mismatch';
+  openedAt: string;
+};
+
+type JournalRow = {
+  id: string;
+  at: string;
+  mode: Mode;
+  strategy: string;
+  strategyVersion: string;
+  riskPolicyVersion: string;
+  direction: 'BUY' | 'SELL' | null;
+  entry: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  exit: number | null;
+  volume: number | null;
+  grossPnl: number;
+  spreadCost: number;
+  commission: number;
+  slippageCost: number;
+  swap: number;
+  netPnl: number;
+  rMultiple: number;
+  result: 'win' | 'loss' | 'breakeven' | 'blocked';
+  regime: MarketRegime;
+  session: MarketSnapshot['session'];
+  decisionSource: 'auto' | 'approved' | 'shadow' | 'blocked';
+  exitReason: string;
+  slippagePoints: number;
+  note?: string;
+};`;
+
+    const typeScale=[
+      ['display / price','30–33 px · 600','ราคา bid และ P&L หลัก · tabular-nums'],
+      ['h1 page','21 px · 700','ชื่อหน้าจอ'],
+      ['metric','16–19 px · 600','ตัวเลขในการ์ดตัวชี้วัด'],
+      ['card header','12–13 px · 700','หัวการ์ด · ไทยไม่ใส่ letter-spacing'],
+      ['body','13 px · 400','คำอธิบายและเหตุผล'],
+      ['table content','12–13 px · 400','เนื้อหาในตาราง'],
+      ['label / metadata','11–12 px · mono','ป้ายกำกับ คอลัมน์ เวลา'],
+      ['mobile body','14 px · 400','เนื้อหาบนมือถือ'],
+      ['mobile value','16 px ขึ้นไป · 600','ค่าสำคัญบนมือถือ'],
+      ['ขั้นต่ำเด็ดขาด','11 px','ไม่มีข้อความใดเล็กกว่านี้ในทุก breakpoint']
+    ].map(([k,v,use])=>({k,v,use}));
+
+    const tokens=[
+      ['--bg','#141312','—','พื้นหลังแอปพลิเคชัน',null],
+      ['--surface','#1c1b1a','—','พื้นการ์ดและ panel',null],
+      ['--surface-elevated','#242322','—','หัวตาราง แถบเครื่องมือ modal footer',null],
+      ['--border','#3f3d3c','—','เส้นขอบการ์ด',null],
+      ['--text-primary','#f5f3f2','16.1:1','ตัวเลขและหัวข้อ',true],
+      ['--text-secondary','#b9b4b2','8.4:1','คำอธิบายและป้ายกำกับ',true],
+      ['--text-tertiary','#9a9593','5.6:1','ข้อมูลรอง — ยังผ่านเกณฑ์ข้อความปกติ',true],
+      ['--accent-gold','#d9b054','8.3:1','XAU chrome · ปุ่มหลัก · สถานะ ASK',true],
+      ['--direction-buy','#4cc39e','8.6:1','ทิศทาง BUY เท่านั้น',true],
+      ['--direction-sell','#ff8a6e','7.4:1','ทิศทาง SELL เท่านั้น',true],
+      ['--pnl-positive','#4cc39e','8.6:1','กำไร',true],
+      ['--pnl-negative','#ff8a6e','7.4:1','ขาดทุน',true],
+      ['--system-critical','#ff5c3d','5.4:1','ความล้มเหลวของระบบ · หยุดฉุกเฉิน · บัญชีเงินจริง',true],
+      ['--system-critical-fill','#c62810','5.2:1 (ขาวบนแดง)','พื้นทึบสีแดงกับตัวอักษรขาว',true],
+      ['--trade-blocked','#e8836b','7.0:1','ข้อเสนอที่ถูกระงับ — แยกจาก critical',true],
+      ['--warning','#e8a54a','9.5:1','คำเตือนที่ยังทำรายการได้',true],
+      ['--information','#6fb0e0','8.0:1','สถานะระบบ การยืนยันทั่วไป executed',true],
+      ['--disabled','#9a9593','5.6:1','ปุ่มที่ปิดใช้งาน — ยังอ่านออกได้',true]
+    ].map(([k,v,ratio,use,pass])=>({k,v,ratio,use,rc:pass===null?MUTE:(pass?OK:R)}));
+
+    const components=[
+      ['ApplicationShell','children, screen','loading · ready · offline','—','ไม่มี'],
+      ['GlobalSystemStatus','status','running · paused · emergency · recovering','system_heartbeats','ไม่เขียนสถานะเอง'],
+      ['DemoEnvironmentBadge','—','สถานะเดียว ซ่อนไม่ได้','trading_accounts','—'],
+      ['SystemStateIndicator','state','4 สถานะ + unknown','system_heartbeats','—'],
+      ['TradingModeIndicator','mode, onRequestChange','3 โหมด · disabled ระหว่างรอคำสั่ง','trading_modes','ไม่เปลี่ยนโหมดโดยตรง'],
+      ['MT5ConnectionIndicator','connection','connected · disconnected · reconnecting','system_heartbeats','—'],
+      ['MarketDataFreshnessIndicator','freshness, ageMs, transport','live · delayed · stale · fallback','market_snapshots','—'],
+      ['SystemDetailsPopover','details[]','closed · open','system_heartbeats · system_components','—'],
+      ['MarketSummaryCard','snapshot','live · delayed · stale · loading','market_snapshots','—'],
+      ['LivePriceDisplay','bid, ask, freshness','live · stale (ป้ายทับราคา)','broadcast','—'],
+      ['SessionIndicator','session','4 ช่วงเวลา','market_snapshots','—'],
+      ['MarketRegimeBadge','regime, version','4 regime + unknown','market_regimes','—'],
+      ['EconomicEventBanner','event, countdown','info · approaching · blackout','economic_events','—'],
+      ['MarketDataSourceLabel','provider, updatedAt','fresh · stale','market_snapshots','—'],
+      ['TradeProposalCard','proposal','wait · ask · auto · blocked · expired · executed','trade_proposals','ไม่เปลี่ยน status'],
+      ['TradeProposalDetail','proposal, checks','ครบทุกสถานะของข้อเสนอ','trade_proposals · risk_checks','ไม่แก้ risk_checks'],
+      ['SignalEvidencePanel','evidence','not_calibrated · insufficient_data · calibrated · out_of_date','strategy_runs · model_versions','—'],
+      ['DecisionProvenancePanel','provenance','collapsed · expanded','strategy_runs · model_versions','—'],
+      ['RiskValidationChecklist','checks[]','pass · warn · fail · na','risk_checks','อ่านอย่างเดียวเสมอ'],
+      ['SignalExpiryTimer','expiresAt','normal · <10s · expired','trade_proposals','เวลาจริงอยู่ที่เซิร์ฟเวอร์'],
+      ['ProposalDecisionActions','proposal, onApprove, onReject','enabled · disabled+reason · submitting · locked','—','ไม่มีปุ่มข้าม BLOCK'],
+      ['PositionSizingBreakdown','sizing','normal · rounded · blocked_by_min_lot','trade_proposals','—'],
+      ['RiskBudgetPanel','budgets[]','normal · near-threshold · exceeded','risk_policies · daily_performance','—'],
+      ['RiskLimitMeter','used, max, threshold','normal · warning · breached','daily_performance','—'],
+      ['RiskPolicyVersionBadge','version, confirmedAt','synced · pending worker ack','risk_policies','—'],
+      ['RiskPolicyChangeDialog','rule, newValue','increase (แดง ยืนยันสองครั้ง) · decrease · invalid','—','ไม่เขียน risk_policies'],
+      ['ActivePositionCard','position | null','empty · open-profit · open-loss · closing · mismatch','positions','ไม่แก้ positions'],
+      ['PositionManagementPanel','position','ready · request-pending · rejected','positions','ส่งคำขอเท่านั้น'],
+      ['PositionCloseRequestDialog','position','ready · submitting · confirmed · failed','—','ไม่ปิดเอง'],
+      ['PositionModificationRequestDialog','position, field','ready · invalid (เพิ่มความเสี่ยง) · submitting','—','ไม่แก้ SL/TP เอง'],
+      ['MobileApprovalPage','token','valid · invalid link · unauthorized · expired · processed','validate token → proposal','ไม่เชื่อค่าใน URL'],
+      ['ApprovalSecurityState','tokenState','valid · expired · used · unauthorized · tampered','edge function','—'],
+      ['ApprovalRevalidationPanel','refreshed','revalidating · ok · price-moved · risk-changed','trade_proposals','—'],
+      ['ExecutionProgressTimeline','command','9 ขั้นหลัก: approval recorded → durable command created → waiting for worker → worker claimed → refreshing market data → revalidating proposal and risk → MT5 order check → submitting broker order → broker confirmation · terminal: rejected, failed, expired, cancelled, worker_unavailable, price_outside_tolerance, proposal_version_mismatch','system_commands','ไม่ยืนยันผลก่อนโบรกเกอร์ตอบ'],
+      ['SystemHealthGrid','services[]','healthy · degraded · warning · failed · unknown','system_components','—'],
+      ['SystemComponentStatus','service','5 สถานะ','system_heartbeats','—'],
+      ['SystemIncidentCard','incident','critical · warning · info','system_incidents','—'],
+      ['RecoveryChecklist','checks[]','pass · fail · pending','หลายตาราง','—'],
+      ['EmergencyStopDialog','onConfirm','armed · submitting · active','—','ต้องยืนยันเสมอ'],
+      ['PauseSystemDialog','onConfirm','ready · submitting','—','—'],
+      ['ResumeSystemDialog','checks[]','blocked · ready · submitting','—','ข้ามเช็กลิสต์ไม่ได้'],
+      ['TradeJournalTable','rows, filters','loading · empty · filtered-empty','trade_journal','แก้ได้เฉพาะ user_notes'],
+      ['TradeDetailDrawer','tradeId','loading · ready · not-found','หลายตาราง','—'],
+      ['AuditTimeline','entries[]','loading · empty · ready','audit_logs','ลบไม่ได้'],
+      ['CommandStatusTimeline','commands[]','pending · claimed · validating · executing · succeeded · rejected · failed · expired · cancelled','system_commands','ใช้ SystemCommandStatus เท่านั้น'],
+      ['RiskValidationSummary','total, passed, warned, failed, notRequired','ทุกค่าคำนวณจาก checks.length','risk_checks','ห้ามพิมพ์จำนวนกฎตายตัว'],
+      ['EligibilityPolicyPanel','result: EligibilityPolicyResult','pass · warn · fail · not_required','strategy_runs','ไม่ตัดสิน outcome เอง'],
+      ['EmergencyStopStateIndicator','controlPlane, worker, localKillSwitchEngaged','INACTIVE → REQUESTED → CONTROL_PLANE_RECORDED → WORKER_RECEIVED → LOCAL_EXECUTION_DISABLED → CONFIRMED · ล้มเหลว/ไม่แน่นอน: CONTROL_PLANE_UNAVAILABLE, WORKER_NOT_REACHABLE, WORKER_ACK_TIMEOUT, LOCAL_STATE_UNCONFIRMED, FAILED','system_commands · system_heartbeats','CONFIRMED ต้องมาจาก Worker acknowledgement เท่านั้น'],
+      ['LocalEmergencyStopStatus','localState','armed · triggered · unknown','system_heartbeats','อ่านอย่างเดียว'],
+      ['DevelopmentStateSimulator','scenarios[], showStateSwitcher','20 สถานะจาก PrototypeScenarioId · ตัวเลือก ป้าย จำนวน และค่าเริ่มต้นสร้างจาก store เดียว','mock only','ต้องถูกตัดออกจาก production bundle · showStateSwitcher ควบคุมการแสดงจริง']
+    ].map(([n,props,states,data,prohibited])=>({n,props,states,data,prohibited,
+      pc:prohibited==='—'?'rgba(32,30,29,.5)':R}));
+
+    const ruleGroups=[
+      {title:'BLOCK ไม่มีปุ่มข้าม',c:R,rows:[
+        'รายการที่ถูกระงับด้วยกฎ Hard ต้องไม่มีปุ่ม “เทรดต่อไป” “ข้ามคำเตือน” “Override” หรือ “บังคับส่งคำสั่ง”',
+        'ปุ่มที่อนุญาต: ดูเหตุผล · ดูกฎที่ไม่ผ่าน · ปิดการแจ้งเตือน · Pause ระบบ',
+        'ไม่แสดงกำไรที่คาดว่าจะได้ และไม่ส่งการแจ้งเตือนแบบเร่งด่วนสำหรับรายการที่ถูกระงับ']},
+      {title:'Pause',c:WARN,rows:[
+        'หยุดการเปิดไม้ใหม่ทั้งหมด','ยังติดตาม Position ที่เปิดอยู่ตามปกติ','ยังดูแล SL และ TP ต่อไป',
+        'ยังตรวจสอบสถานะระบบและส่งการแจ้งเตือนเหตุการณ์','ไม่ปิด Position โดยอัตโนมัติ']},
+      {title:'Emergency Stop',c:R,rows:[
+        'ปิดการส่งคำสั่งใหม่ทันที','ยกเลิกข้อเสนอที่ยังไม่ถูกส่ง','ยังเฝ้าดู Position ที่เปิดอยู่อย่างปลอดภัย',
+        'สร้างเหตุการณ์ใน audit log','ต้องผ่านเช็กลิสต์การกู้คืนก่อนกลับมาทำงาน',
+        'ไม่ปิด Position โดยอัตโนมัติ เว้นแต่มีนโยบายที่ตั้งไว้ชัดเจน']},
+      {title:'Resume checklist',c:INFO,rows:[
+        'ยืนยันบัญชี Demo · MT5 เชื่อมต่อ · ข้อมูลตลาดสด','ฐานข้อมูลพร้อมใช้งาน · ไม่มี Position ที่ไม่ตรงกัน',
+        'Daily stop และ Weekly stop ไม่ทำงาน · ยังไม่ถึงเพดาน Drawdown',
+        'Worker heartbeat ปกติ · ความคลาดเคลื่อนของนาฬิกาอยู่ในเกณฑ์ · นโยบายความเสี่ยงถูกต้อง',
+        'กลับมาทำงานที่โหมดจำลองเสมอหลังหยุดฉุกเฉิน']},
+      {title:'ตรวจพบบัญชีเงินจริง',c:R,rows:[
+        'บล็อกการส่งคำสั่งทั้งหมดทันที','แสดงสถานะวิกฤตเต็มหน้าจอ','ไม่มีตัวเลือกยืนยันข้ามในทุกกรณี',
+        'ต้องเปลี่ยนกลับไปใช้บัญชี Demo ที่ยืนยันแล้ว','บันทึกเหตุการณ์ลง audit log']},
+      {title:'Accessibility',c:INK,rows:[
+        'นำทางด้วยคีย์บอร์ดได้ทั้งหมด · โฟกัสเห็นชัดด้วย outline 2 px offset 2 px',
+        'เป้าแตะไม่ต่ำกว่า 44 × 44 px · ปุ่มหลักบนมือถือ 52 px',
+        'ข้อความไทยอ่านได้โดยไม่ต้องซูมในทุก breakpoint',
+        'ทุกกราฟมีสรุปเป็นข้อความใต้กราฟ · ตารางมี caption',
+        'ตัวนับถอยหลังใช้ aria-live off และประกาศเฉพาะเมื่อข้ามเกณฑ์ เพื่อไม่ให้ screen reader อ่านทุกวินาที',
+        'การแจ้งเตือนวิกฤตใช้ role="alert" · การเปลี่ยนสถานะทั่วไปใช้ aria-live="polite"',
+        'ปุ่มทำลายต้องไม่ถูกกระตุ้นด้วยการกดคีย์เดียวโดยบังเอิญ และหยุดฉุกเฉินต้องยืนยันเจตนา',
+        'ปุ่มอนุมัติและปฏิเสธต่างกันชัดเจนทั้งข้อความและรูปทรง ไม่พึ่งตำแหน่ง สี หรือแอนิเมชันอย่างเดียว',
+        'Dialog วิกฤต: โฟกัสย้ายเข้า dialog · พื้นหลังเป็น inert · กำหนดพฤติกรรม Escape ชัดเจน · โฟกัสกลับที่ปุ่มต้นทางเมื่อยกเลิก']}
+    ];
+
+    const responsive=[
+      {bp:'≥ 1440 px',layout:'สามคอลัมน์ 1.05 / 1.45 / 1.05 · การ์ดหลักอยู่ในหน้าจอเดียว',header:'แสดงครบทุกองค์ประกอบหลัก',drop:'ไม่ตัดอะไร'},
+      {bp:'1280 px',layout:'สามคอลัมน์เท่าเดิม ลดระยะภายในการ์ดเป็น 12 px',header:'โหมดใช้ป้ายสั้น · ปุ่มรายละเอียดระบบเป็นไอคอน 44 px · ไม่ตัดคำและไม่ขึ้นบรรทัดใหม่',drop:'ย่อไทม์ไลน์กิจกรรมเหลือ 6 รายการ'},
+      {bp:'1024 px',layout:'สองคอลัมน์ · การ์ดข้อเสนอเต็มความกว้าง · แถบนำทางย่อ',header:'ย้ายโหมดลงแถบที่สอง',drop:'ลิ้นชักการวิเคราะห์พับเก็บโดยค่าเริ่มต้น'},
+      {bp:'390 px',layout:'คอลัมน์เดียว เฉพาะงานตัดสินใจและงานความปลอดภัย',header:'DEMO · สถานะระบบ · โหมด · MT5 · เมนูฉุกเฉิน เท่านั้น',drop:'ตารางบันทึกการเทรด · วิเคราะห์ผลทั้งหมด · Risk Center แบบแก้ไข · กราฟแท่งเทียนละเอียด'}
+    ];
+
+    const devNotes=[
+      'สร้าง Risk Engine เป็นฟังก์ชัน pure ในฝั่ง Worker ที่รับ snapshot + proposal + policy แล้วคืน verdict กับรายการ checks เพื่อให้เทสต์ได้ และ UI เพียงแสดงผล',
+      'อย่าให้ UI คำนวณ verdict เอง ทุกหน้าจออ่านผลชุดเดียวกันจากฐานข้อมูล เพื่อไม่ให้เดสก์ท็อปกับมือถือขัดแย้งกัน',
+      'ราคาไหลผ่าน Realtime Broadcast แต่ค่าที่ใช้ตัดสินใจต้องดึงใหม่แบบ REST ก่อนแสดง dialog ยืนยันเสมอ',
+      'ทุก mutation ต้องมี idempotency key ที่สร้างจากฝั่งไคลเอนต์ และเซิร์ฟเวอร์ต้องปฏิเสธคีย์ซ้ำอย่างเงียบ ๆ ด้วยผลลัพธ์เดิม',
+      'จับเวลาหมดอายุที่เซิร์ฟเวอร์ ตัวเลขนับถอยหลังบน UI เป็นเพียงการแสดงผล',
+      'ใช้ tabular-nums ทุกที่ที่มีตัวเลขเรียงกันในคอลัมน์',
+      'Tailwind: แม็ปโทเคนเป็น CSS variables ใน @theme แล้วอ้างผ่านคลาส · ตั้ง radius เป็น 0 ทั้งสเกล · ตั้ง fontFamily.sans เป็น IBM Plex Sans Thai',
+      'shadcn/ui: ปรับ Dialog, Table, Tabs, Progress, Badge, Tooltip, Popover ให้ radius เป็น 0 และเปลี่ยนโฟกัสริงเป็นสีทอง',
+      'TradingView Lightweight Charts: ใช้ price lines สำหรับ Entry/SL/TP, markers สำหรับสัญญาณและสัญญาณที่ถูกระงับ, series สำหรับเงาช่วงเวลา และไม่เปิดอินดิเคเตอร์ใดเป็นค่าเริ่มต้น',
+      'Development State Simulator ต้องอยู่หลัง feature flag และถูก tree-shake ออกจาก production build · ใช้ได้เฉพาะในต้นแบบ Storybook และการทดสอบภาพอัตโนมัติ · ต้องมี 20 สถานะตาม PrototypeScenarioId: no_signal, wait, auto_eligible, human_approval, blocked, proposal_expired, approval_recorded, revalidation_failed, order_pending, order_rejected, position_open, position_closed, mt5_disconnected, market_data_stale, daily_loss_limit, emergency_stop_requested, emergency_stop_confirmed, emergency_stop_unconfirmed, live_account_detected, minimum_lot_exceeds_risk',
+      'P0 ที่ต้องสมบูรณ์พอให้ลงมือพัฒนามี 22 รายการ: initial setup, demo account verification, global shell, main dashboard, trade proposal detail, risk validation, position sizing, mobile approval, active position, position close request, pause, emergency stop, resume checklist, risk center, system health, basic trade journal, durable command timeline, live account blocked, MT5 disconnected, stale market data, worker unconfirmed, minimum lot exceeds risk',
+      'จำนวนกฎความเสี่ยงต้องมาจาก checks.length เสมอ · เมื่อเวอร์ชันนโยบายเพิ่มหรือลดกฎ UI ต้องเปลี่ยนตามเองโดยไม่ต้องแก้สำเนา',
+      'เขียน visual regression test ครอบ 20 scenarios × breakpoint ที่กำหนด (1440 × 900, 1280 × 720, 390 × 844)',
+      'ทดสอบกรณีที่ dashboard ปิดอยู่แต่ Worker ยังทำงาน เพื่อยืนยันว่า SL/TP ยังถูกดูแลและ journal ยังถูกบันทึกครบ'
+    ];
+
+    // contrast audit — every token × every surface actually checked
+    const SURF=[['#141312','main bg'],['#1c1b1a','surface'],['#242322','elevated'],['#302e2d','tertiary / row']];
+    const FG=[
+      ['--text-primary','#f5f3f2',[16.1,15.2,14.0,12.2]],
+      ['--text-secondary','#b9b4b2',[8.4,7.9,7.3,6.4]],
+      ['--text-tertiary','#9a9593',[5.6,5.3,4.9,4.3]],
+      ['--accent-gold','#d9b054',[8.3,7.8,7.2,6.3]],
+      ['--direction-buy','#4cc39e',[8.6,8.1,7.5,6.5]],
+      ['--direction-sell','#ff8a6e',[7.4,7.0,6.4,5.6]],
+      ['--pnl-positive','#4cc39e',[8.6,8.1,7.5,6.5]],
+      ['--pnl-negative','#ff8a6e',[7.4,7.0,6.4,5.6]],
+      ['--system-critical','#ff5c3d',[5.4,5.1,4.7,4.1]],
+      ['--trade-blocked','#e8836b',[7.0,6.6,6.1,5.3]],
+      ['--warning','#e8a54a',[9.5,8.9,8.2,7.2]],
+      ['--information','#6fb0e0',[8.0,7.5,6.9,6.1]],
+      ['--disabled','#9a9593',[5.6,5.3,4.9,4.3]],
+      ['--border (UI boundary)','#3f3d3c',[1.5,1.3,1.1,1.0]],
+      ['--focus-ring','#d9b054',[8.3,7.8,7.2,6.3]]
+    ];
+    const contrastMatrix=FG.map(([k,hex,rs])=>{
+      const worst=Math.min(...rs);
+      const isBoundary=k.indexOf('border')>=0;
+      const pass=isBoundary? worst>=1.0 : worst>=4.5;
+      let permitted, correction;
+      if(isBoundary){ permitted='เส้นแบ่งตกแต่งเท่านั้น'; correction='ไม่ใช้เป็นขอบขององค์ประกอบที่กดได้ — ขอบที่ต้องมองเห็นใช้ --text-tertiary (5.6:1) หรือหนา 2px'; }
+      else if(worst>=4.5){ permitted='ข้อความปกติและใหญ่'; correction='ไม่ต้องแก้'; }
+      else { permitted='ข้อความใหญ่เท่านั้น'; correction='ห้ามใช้กับข้อความขนาดปกติบนพื้น elevated ขึ้นไป — ใช้พื้นทึบ --system-critical-fill (#c62810 กับตัวอักษรขาว 5.2:1) แทน'; }
+      return {k,hex,rs:rs.map((v,i)=>({v:v.toFixed(1),surf:SURF[i][0],name:SURF[i][1],
+        c:(isBoundary? v>=1.0 : v>=4.5)?OK:(v>=3.0?WARN:R)})),
+        worst:worst.toFixed(1),pass,permitted,correction,pc:pass?OK:WARN};
+    });
+
+    const codexWarnings=[
+      'คัดลอกต้นแบบไปเป็นคอมโพเนนต์ใหญ่ก้อนเดียวใน production',
+      'ใช้ inline style ของต้นแบบเป็นสถาปัตยกรรมการจัดสไตล์ของ production',
+      'ใช้สคริปต์สนับสนุนของต้นแบบใน production',
+      'hard-code ค่าตลาดสมมติจากต้นแบบ',
+      'hard-code ข้อกำหนดสัญญาของโบรกเกอร์',
+      'hard-code จำนวนกฎความเสี่ยง',
+      'ใช้คะแนนสัญญาณเป็นเกณฑ์ตัดสิน AUTO',
+      'ถือว่าการอนุมัติเท่ากับการส่งคำสั่งสำเร็จ',
+      'ให้ frontend แก้สถานะการทำงานของโบรกเกอร์',
+      'เก็บ tick ดิบเป็นแถวใน PostgreSQL แบบไม่จำกัด',
+      'ใส่ข้อมูลลับของ Supabase ในเบราว์เซอร์',
+      'เก็บข้อมูลลับของ MT5 ใน Supabase',
+      'เพิ่มความสามารถ Live Trading',
+      'ใช้คะแนนคุณภาพสัญญาณเป็นเกณฑ์ AUTO หรือ ASK',
+      'พึ่งเหตุการณ์ Realtime เป็นแหล่งคำสั่งถาวร',
+      'รับ payload ของคำสั่งโดยไม่ตรวจสอบตามชนิดคำสั่ง',
+      'พัฒนา P0, P1 และ P2 ทั้งหมดในการเปลี่ยนแปลงครั้งเดียว'
+    ];
+
+    const acceptance=[
+      {title:'ความหมายทางการเทรด',c:R,rows:[
+        'ไม่มีเกณฑ์คะแนนตายตัวเป็นตัวตัดสิน AUTO เหลืออยู่ที่ใดในต้นแบบหรือเอกสาร',
+        'คะแนนสัญญาณไม่ถูกนำเสนอเป็นความน่าจะเป็นของการชนะ',
+        'ตัวอย่างการคำนวณปริมาณกระทบยอดตรงกันทุกค่า',
+        'ปริมาณสูงสุดที่อนุญาตคือ 0.01 และไม่ถือว่าทุกไม้ใช้ 0.01',
+        'ปริมาณขั้นต่ำที่เกินงบความเสี่ยงทำให้เกิด BLOCK',
+        'ไม่ลดระยะ Stop Loss เพื่อให้ปริมาณพอดีกับงบ']},
+      {title:'ความหมายของการอนุมัติ',c:WARN,rows:[
+        'การอนุมัติไม่สื่อว่าส่งคำสั่งสำเร็จทันที',
+        'ข้อความบนปุ่มสื่อเจตนาของผู้ใช้เท่านั้น',
+        'สถานะการตรวจสอบซ้ำมองเห็นได้',
+        'การยืนยันจากโบรกเกอร์เป็นสถานะสุดท้ายที่แยกออกมา',
+        'กันการอนุมัติซ้ำด้วย idempotency key',
+        'จัดการกรณีเวอร์ชันข้อเสนอไม่ตรงกัน']},
+      {title:'การตรวจกฎความเสี่ยง',c:R,rows:[
+        'จำนวนกฎคำนวณจากข้อมูลจริง ไม่พิมพ์ตายตัว',
+        'BLOCK ไม่มีปุ่มข้าม',
+        'Hard Risk Engine ถูกข้ามไม่ได้',
+        'เวอร์ชันนโยบายความเสี่ยงมองเห็นได้',
+        'แต่ละกฎแสดง PASS, WARN, FAIL หรือ NOT REQUIRED']},
+      {title:'การหยุดระบบฉุกเฉิน',c:R,rows:[
+        'สถานะ REQUESTED และ CONFIRMED แยกกัน',
+        'มีสถานะ Worker timeout',
+        'มีสถานะวิกฤตเมื่อยืนยันไม่ได้',
+        'มี Local Emergency Stop',
+        'ไม่ปิด Position โดยอัตโนมัติเป็นค่าเริ่มต้น',
+        'การกลับมาทำงานต้องผ่านเช็กลิสต์ความปลอดภัย']},
+      {title:'ความปลอดภัย',c:INK,rows:[
+        'ระบุ Dedicated Worker Credential แบบสิทธิ์น้อยที่สุด',
+        'ไม่มีถ้อยคำ service-role ที่กำกวมเหลืออยู่',
+        'ข้อมูลลับ MT5 อยู่บน Windows เท่านั้น',
+        'การอนุมัติบนมือถือยืนยันตัวตน LINE',
+        'โทเคนอนุมัติใช้ครั้งเดียวและอายุสั้น',
+        'frontend แก้ระเบียนการทำงานที่ป้องกันไว้ไม่ได้']},
+      {title:'ความน่าเชื่อถือของ Supabase',c:INFO,rows:[
+        'คำสั่งถูกเก็บแบบถาวร',
+        'Realtime ไม่ใช่กลไกส่งคำสั่งเพียงอย่างเดียว',
+        'Worker จับจองคำสั่งแบบ atomic',
+        'ทุกคำสั่งมี idempotency key',
+        'คำสั่งกู้คืนได้หลังเชื่อมต่อกลับ',
+        'Worker กระทบยอดฐานข้อมูลกับโบรกเกอร์หลังรีสตาร์ต']},
+      {title:'การเข้าถึง',c:INK,rows:[
+        'แก้การเว้นวรรคตัวอักษรบนข้อความไทยแล้ว',
+        'คงขนาดตัวอักษรไทยขั้นต่ำ 11 px',
+        'ตรวจคอนทราสต์บนทุกพื้นผิว ไม่ใช่เฉพาะพื้นหลังหลัก',
+        'ไม่สื่อสถานะด้วยสีอย่างเดียว',
+        'การกระทำวิกฤตต้องยืนยันอย่างตั้งใจ',
+        'มีเอกสารพฤติกรรมคีย์บอร์ดและ screen reader']},
+      {title:'ขอบเขต',c:R,rows:[
+        'DEMO ONLY ยังคงถาวรและมองเห็นได้',
+        'XAU/USD ONLY ระบุชัดเจน',
+        'ไม่มีสวิตช์ Live Trading',
+        'P0 สมบูรณ์พอให้ Codex ลงมือพัฒนา',
+        'State Simulator ถูกตัดออกจาก production',
+        'มีบันทึกการเปลี่ยนแปลงฉบับ 2.1']}
+    ];
+
+    const changelog21=[
+      ['เกณฑ์ AUTO','คะแนนสัญญาณเป็นตัวตัดสิน','eligibility policy 7 เงื่อนไขที่มี policyId และ policyVersion · จำนวนตัวอย่างขั้นต่ำเป็นกฎในนโยบาย ไม่ใช่เกณฑ์คะแนน'],
+      ['จำนวนกฎความเสี่ยง','พิมพ์ตายตัว 16 ในหัวข้อและสำเนา','คำนวณจาก checks.length ทุกจุด · แสดง CHECKS / PASSED / WARNING / FAILED / N/A'],
+      ['การคำนวณปริมาณ','ตัวเลขความเสี่ยงไม่กระทบยอดกับระยะ Stop','ตัวอย่าง PASS (equity 2,200 · budget 5.50 · loss 5.50 · 0.25%) และ BLOCK (equity 1,000 · budget 2.50 · calculated 0.0045 · loss at min lot 5.50) ที่กระทบยอดตรงกัน'],
+      ['ข้อความอนุมัติ','CTA สื่อว่ากดแล้วส่งคำสั่งทันที','ยืนยันการอนุมัติ / อนุมัติข้อเสนอ · เพิ่มคำเตือนว่าการอนุมัติไม่รับประกันว่าจะเปิด Order'],
+      ['ลำดับการอนุมัติ','6 ขั้น','9 ขั้น รวมการดึงข้อมูลตลาดใหม่ การตรวจกฎซ้ำ order check และการยืนยันจากโบรกเกอร์ พร้อมเส้นทางล้มเหลว 6 แบบ'],
+      ['Emergency Stop','ไม่มีสถานะล้มเหลว','state machine 6 สถานะปกติ + 5 สถานะล้มเหลว/ไม่แน่นอน · สถานะวิกฤตเมื่อยืนยันไม่ได้ พร้อมคำแนะนำ 5 ข้อ'],
+      ['Local safety','ไม่มี','Tray application, ปุ่ม Local Emergency Stop, CLI aurum-worker emergency-stop และสถานะที่เขียนลงดิสก์'],
+      ['คิวคำสั่ง','พึ่ง Realtime','ตารางคำสั่งถาวร · Realtime เป็นเพียงกลไกปลุก · Worker จับจองแบบ atomic มี lease, attemptCount, expiresAt และกู้คืนหลังเชื่อมต่อกลับ'],
+      ['ข้อมูลลับ Worker','ถ้อยคำกำกวมเรื่องขอบเขตคีย์','Dedicated Worker Credential แบบสิทธิ์น้อยที่สุด พร้อมข้อห้าม 10 ข้อ และรายการที่ frontend ต้องไม่ได้รับ 8 รายการ'],
+      ['การอนุมัติบนมือถือ','โทเคนลงลายเซ็นใช้ครั้งเดียว','เพิ่ม LINE LIFF identity, allowlist, การผูกเวอร์ชันข้อเสนอ, MobileApprovalSession และสถานะใหม่ 11 แบบ'],
+      ['การผูกข้อเสนอ','ไม่ผูกบัญชีและ symbol','ผูก userId, tradingAccountId, accountType, brokerServer, canonicalSymbol, brokerSymbol, symbolSpecificationVersion และ proposalVersion'],
+      ['ตัวอักษรไทย','หัวข้อไทยและอังกฤษอยู่ในสแปนเดียวกันพร้อม letter-spacing','แยกหัวข้อไทย (ไม่เว้นวรรคพิเศษ) ออกจาก eyebrow อังกฤษ (เว้นวรรคควบคุมได้)'],
+      ['คอนทราสต์','ตรวจเฉพาะพื้นหลังหลัก','ตาราง 15 โทเคน × 4 พื้นผิว พร้อมค่าที่แย่ที่สุด ขนาดข้อความที่อนุญาต และวิธีแก้ต่อโทเคน'],
+      ['คำเตือนสำหรับ Codex','ไม่มี','ข้อห้าม 14 ข้อ และคำสั่งชัดเจนว่าให้สร้างจากสเปก ไม่ใช่แปลงต้นแบบเป็นโค้ด production'],
+      ['P0','9 หน้าจอ','22 รายการ รวม Durable Command Timeline, Worker Unconfirmed State และ Minimum Lot Exceeds Risk State'],
+      ['State Simulator','13 สถานะ','20 สถานะ รวม approval recorded, revalidation failed, emergency stop requested/confirmed/unconfirmed']
+    ].map(([area,was,now])=>({area,was,now}));
+
+    const changelog=[
+      ['สถาปัตยกรรม','worker + ฐานข้อมูลในเครื่อง ไม่ระบุระนาบชัดเจน','แยก control plane (Supabase) ออกจาก execution plane (Windows MT5 Worker) พร้อมแผนผังและความรับผิดชอบรายข้อ'],
+      ['สิทธิ์ Frontend','ไม่ได้ระบุขอบเขตการเขียนข้อมูล','ระบุตารางที่เขียนไม่ได้ 8 รายการ และเจตนาที่ส่งได้ 9 แบบ ผ่าน Edge Function หรือ RPC เท่านั้น'],
+      ['สถานะคำสั่ง','ปุ่มกดแล้วขึ้น toast ว่าสำเร็จทันที','command timeline 4–7 ขั้นที่มีสถานะกลาง รวมกรณีตรวจซ้ำแล้วไม่ผ่าน'],
+      ['การคำนวณปริมาณ','ระบุ lot 0.01 คงที่ทุกไม้','แยก calculated / minimum / permitted / requested lot พร้อมกรณี BLOCK เมื่อขั้นต่ำเกินงบความเสี่ยง'],
+      ['เกณฑ์สัญญาณ','เกณฑ์คะแนนตายตัวเป็นตัวตัดสิน AUTO','eligibility policy ที่มีเวอร์ชัน 7 เงื่อนไข และสถานะการสอบเทียบโมเดลที่แสดงชัดว่ายังไม่สอบเทียบ'],
+      ['ที่มาข้อมูล','ไม่มี','แผง Decision Evidence 10 ฟิลด์ รวม snapshot id, feature id, decision trace, worker id และเวอร์ชันทุกชั้น'],
+      ['ตัวอักษร','Archivo อย่างเดียว ขนาดเล็กสุด 8.5 px','IBM Plex Sans Thai เป็นฟอนต์หลัก ขนาดเล็กสุด 11 px และตัดการเว้นวรรคตัวอักษรบนข้อความไทย'],
+      ['สี','โทเคนแดงตัวเดียวใช้กับทุกความหมาย','แยก direction-sell, pnl-negative, trade-blocked, system-critical และปรับทุกคู่สีให้ผ่าน WCAG AA'],
+      ['แถบสถานะ','9 องค์ประกอบเรียงกันจนล้นที่ 1280 px','เหลือ 6 องค์ประกอบหลัก ส่วนที่เหลืออยู่ใน popover รายละเอียดระบบ 10 รายการ'],
+      ['State switcher','ไม่ได้ระบุสถานะการใช้งาน','ติดป้าย Development State Simulator ชัดเจน อยู่หลัง feature flag และตัดออกจาก production build'],
+      ['Mobile approval','อนุมัติแล้วส่งคำสั่งทันที','ลิงก์ใช้ครั้งเดียวที่ลงลายเซ็น มีขั้นตรวจสอบใหม่ ข้อความเตือนว่าการอนุมัติไม่รับประกันการเปิด Order และสถานะยกเว้น 10 แบบ'],
+      ['Risk Center','4 กลุ่มกฎ แสดงค่าอย่างเดียว','5 กลุ่ม 27 กฎ พร้อมการใช้งานปัจจุบัน ผลเมื่อถึงเกณฑ์ ประเภท hard/soft และเวอร์ชันนโยบาย'],
+      ['System Health','รายการบริการเดียว 17 รายการ','แยกเป็น execution plane และ control plane พร้อมบริการ Supabase 4 รายการที่เพิ่มเข้ามา'],
+      ['Analytics','แสดงกำไรสุทธิอย่างเดียว','แยก gross → spread → commission → slippage → swap → net และเพิ่มเวลาที่ระบบหยุดทำงานกับเวอร์ชันที่ใช้'],
+      ['ลำดับความสำคัญ','ไม่มี','ติดป้าย P0 / P1 / P2 ทั้งในแถบนำทางของต้นแบบและใน screen-to-data map']
+    ].map(([area,was,now])=>({area,was,now}));
+
+    return {planes,forbidden,intents,closeFlow,screenMap,authModel,realtime,rls,contracts,
+      sizingFlow,sizingFields,minlotCase,eligKeys,okLabels,badLabels,safePresent,schema,
+      typeScale,tokens,components,ruleGroups,responsive,devNotes,changelog,
+      queueFlow,recoverAfter,reconnectOrder,estopStates,estopFail,estopActions,localSafety,
+      sizingExamples,liffFlow,tokenProps,mobileStates,workerCred,neverInBrowser,
+      contrastMatrix,codexWarnings,acceptance,changelog21};
+  }
+}
+
+</script>
+</body>
+</html>
