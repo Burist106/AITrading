@@ -2,7 +2,7 @@
 
 These gates apply before any Demo broker execution is introduced.
 
-`[x]` means verified in the current Bootstrap/Milestone 1 workspace. `[ ]` means deliberately pending. A GitHub `main` repository is configured, but the clean-checkout CI gate remains unchecked until its workflow completes successfully for the published project commit; this does not authorize execution.
+`[x]` means verified in the current Bootstrap/Milestone 1 workspace. `[ ]` means deliberately pending. GitHub Actions completed the clean-checkout quality and database jobs successfully for published implementation commit `ab7df47`; this does not authorize execution.
 
 ## Repository and quality
 
@@ -11,7 +11,7 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Web tests pass
 - [x] Worker tests pass without MT5 installed
 - [x] Formatting and linting pass
-- [ ] CI runs on a clean checkout
+- [x] CI runs on a clean checkout
 - [x] No credentials or secret values are committed
 
 ## Design traceability

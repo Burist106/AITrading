@@ -38,7 +38,7 @@ Forbidden:
 
 ## Milestone 1 — Supabase Domain and Security Foundation
 
-Status (2026-08-26): **complete locally with documented limitations**. The schema, forced RLS, secured actions, durable queue, generated types, read-only Web adapters, and local database tests are implemented. No remote Supabase project was linked or changed. Clean-checkout CI remains pending confirmation on GitHub Actions; Worker restart/reconnect reconciliation remains a pre-execution gate. Milestone 2 has not started.
+Status (2026-08-26): **complete locally with documented limitations**. The schema, forced RLS, secured actions, durable queue, generated types, read-only Web adapters, and local database tests are implemented. No remote Supabase project was linked or changed. GitHub Actions verified the clean-checkout quality and database jobs on published implementation commit `ab7df47`; Worker restart/reconnect reconciliation remains a pre-execution gate. Milestone 2 has not started.
 
 Deliver:
 
