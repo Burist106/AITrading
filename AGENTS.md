@@ -38,15 +38,15 @@ The prototype is a visual and behavioral reference, not production source code.
 
 ## Credential boundaries
 
-Never read, print, log, commit, upload, or place into prompts:
+Never request, print, log, commit, upload, or place into prompts:
 
-- MT5 login, password, server credentials, or terminal secrets
+- MT5 password, server credentials, or terminal secrets
 - Supabase secret keys or Worker credential
 - LINE channel secret or access token
 - OpenAI API keys
 - Browser cookies or personal access tokens
 
-Use `.env.example` with empty placeholder names only. MT5 credentials must remain on the Windows Execution Node in future milestones.
+An MT5 password must never be requested, read, accepted, persisted, logged, uploaded, or passed to `initialize()`. The Worker must never call `login()`. A full account login must never be logged, persisted remotely, displayed, or committed. The Worker may transiently inspect the account identifier and server returned by `account_info()` solely for fail-closed Demo and binding verification; raw values must stay in process memory, and every log, database row, UI response, test snapshot, and incident must use a masked or one-way fingerprinted identifier. Use `.env.example` with empty placeholder names only.
 
 ## Development workflow
 
