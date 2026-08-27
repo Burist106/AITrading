@@ -13,14 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.0.10
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24.19.0
           cache: pnpm
-      - name: Enable exact pnpm
-        run: corepack enable && corepack prepare pnpm@11.24.0 --activate
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: 3.13.7
           cache: pip
@@ -37,13 +39,15 @@ jobs:
     env:
       SUPABASE_NO_UPDATE_NOTIFIER: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.0.10
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24.19.0
           cache: pnpm
-      - name: Enable exact pnpm
-        run: corepack enable && corepack prepare pnpm@11.24.0 --activate
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
       - name: Start localhost-only Supabase
