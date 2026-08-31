@@ -2,7 +2,7 @@
 
 ## Scope and invariants
 
-This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. Its current status is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. It observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against separately confirmed durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
+This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. Its current status is **COMPLETE WITH DOCUMENTED LIMITATIONS**. It observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against separately confirmed durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
 
 The following invariants apply at every boundary:
 

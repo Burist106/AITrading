@@ -58,7 +58,7 @@ Exit gate:
 
 ## Milestone 2 — Read-only Windows MT5 Worker
 
-Status (2026-08-31): **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. The source-review patch is limited to the read-only Windows boundary, confirmed binding, bounded history evidence, polling separation, candle classification, smoke outcomes, and fail-closed validation. Milestone 3 is not started or authorized. The real-terminal smoke remains `NOT RUN` unless an operator explicitly opts in with an eligible local Demo Terminal and every check succeeds.
+Status (2026-08-31): **COMPLETE WITH DOCUMENTED LIMITATIONS**. The source-review patch and all three required Pull Request jobs passed for the read-only Windows boundary, confirmed binding, bounded history evidence, polling separation, candle classification, smoke outcomes, and fail-closed validation. Milestone 3 is not started or authorized. The real-terminal smoke remains `NOT RUN` unless an operator explicitly opts in with an eligible local Demo Terminal and every check succeeds.
 
 Deliver:
 

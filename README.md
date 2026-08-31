@@ -11,7 +11,7 @@ Aurum Console is a safety-first control-plane and Windows Worker foundation for 
 - Maximum open Positions: **1**
 - Future executable proposals require a Stop Loss
 - Completed: **Bootstrap and Milestone 1**
-- Milestone 2: **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**
+- Milestone 2: **COMPLETE WITH DOCUMENTED LIMITATIONS**
 - Milestone 3: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**
 
 Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch.

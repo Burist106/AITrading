@@ -2,7 +2,7 @@
 
 ## Scope
 
-Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. It observes one already-open MetaTrader 5 Demo terminal for canonical `XAUUSD`. The environment remains `DEMO_ONLY`, runtime mode remains `SHADOW`, maximum permitted volume remains `0.01`, maximum open Positions remains one, and a Stop Loss remains mandatory for any future proposal. This milestone contains no strategy, proposal generation, Risk Engine, approval, command consumer, order execution, broker write, or Position mutation. Milestone 3 is not started or authorized.
+Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. It observes one already-open MetaTrader 5 Demo terminal for canonical `XAUUSD`. The environment remains `DEMO_ONLY`, runtime mode remains `SHADOW`, maximum permitted volume remains `0.01`, maximum open Positions remains one, and a Stop Loss remains mandatory for any future proposal. This milestone contains no strategy, proposal generation, Risk Engine, approval, command consumer, order execution, broker write, or Position mutation. Milestone 3 is not started or authorized.
 
 The optional native dependency is exactly:
 

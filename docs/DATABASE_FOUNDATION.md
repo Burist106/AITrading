@@ -2,7 +2,7 @@
 
 ## Scope
 
-These local migrations establish the Milestone 1 control plane and the Milestone 2 sanitized MT5 observation foundation. Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. `broker_orders`, `trade_executions`, and `positions` remain protected read-model foundations only. No database action creates an order, records a simulated execution, changes a Position, or calls an external system. Milestone 3 is not started.
+These local migrations establish the Milestone 1 control plane and the Milestone 2 sanitized MT5 observation foundation. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. `broker_orders`, `trade_executions`, and `positions` remain protected read-model foundations only. No database action creates an order, records a simulated execution, changes a Position, or calls an external system. Milestone 3 is not started.
 
 All instants are `timestamptz`, all identifiers are UUIDs, and money, prices, percentages, and volume use PostgreSQL `numeric` with explicit finite-value checks. Owner-scoped relationships include `owner_id` in both the child and referenced key; account-bound relationships also carry `trading_account_id` through composite foreign keys.
 

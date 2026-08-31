@@ -2,7 +2,7 @@
 
 These gates apply before any Demo broker execution is introduced.
 
-`[x]` means verified in the current workspace. `[ ]` means deliberately pending. Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**; it adds read-only observation and reconciliation only and does not authorize execution. Milestone 3 is not started.
+`[x]` means verified in the current workspace. `[ ]` means deliberately pending. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**; it adds read-only observation and reconciliation only and does not authorize execution. Milestone 3 is not started.
 
 ## Repository and quality
 
@@ -11,7 +11,7 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Web tests pass
 - [x] Worker tests pass without MT5 installed
 - [x] Formatting and linting pass
-- [ ] The final Milestone 2 source-review patch passes all three Pull Request jobs on a clean checkout
+- [x] The final Milestone 2 source-review patch passes all three Pull Request jobs on a clean checkout
 - [x] No credentials or secret values are committed
 
 ## Design traceability

@@ -2,7 +2,7 @@
 
 ## Scope
 
-Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. It adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project. Milestone 3 is not started or authorized.
+Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. It adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project. Milestone 3 is not started or authorized.
 
 The invariant boundary is fixed:
 

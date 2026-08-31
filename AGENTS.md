@@ -4,7 +4,7 @@
 
 Build a safety-first XAU/USD trading research and Demo execution platform. The system is strictly `DEMO ONLY` until a separate future project explicitly changes that rule. No task in the current roadmap authorizes Live Trading.
 
-Current delivery status: Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. Milestone 3 is not started and is not authorized by the current task.
+Current delivery status: Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. Milestone 3 is not started and is not authorized by the current task.
 
 ## Source-of-truth order
 
