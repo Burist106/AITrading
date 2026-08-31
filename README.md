@@ -10,14 +10,17 @@ Aurum Console is a safety-first control-plane and Windows Worker foundation for 
 - Maximum permitted volume: **0.01**
 - Maximum open Positions: **1**
 - Future executable proposals require a Stop Loss
-- Completed: **Bootstrap, Milestone 1, and Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation**
-- Next authorized milestone: **Milestone 3 — Shadow Pipeline (not started)**
+- Completed: **Bootstrap and Milestone 1**
+- Milestone 2: **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**
+- Milestone 3: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**
 
 Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch.
 
 ## Architecture
 
 The Next.js Web Console reads owner-scoped, sanitized views. The Python Worker owns local read-only MT5 access behind a typed port. Supabase stores durable owner-scoped domain state and exposes narrowly granted RPCs; forced RLS and a dedicated `aurum_worker` role prevent browser or Worker direct writes to protected tables. Shared TypeScript contracts and cross-language fixtures keep JSON boundaries explicit.
+
+Milestone 2 treats discovery, observation, and confirmation as different states. A broker symbol is XAU/USD only when its native base/profit currencies are `XAU`/`USD`, and an observed fingerprint never confirms itself. Lightweight tick polling, Position/active-Order observation, and full reconciliation have separate bounded cadences; only a full cycle queries Order/Deal history and persists its exact current evidence. Routine tick telemetry does not grow the security audit log.
 
 ```text
 apps/web                 Thai-first Next.js read-only console
@@ -57,6 +60,8 @@ pnpm worker:install:mt5
 ```
 
 This pins `MetaTrader5==5.0.6090` for Python `3.13.7`. Normal Linux quality checks do not install it. The optional real-terminal smoke command is disabled unless every explicit local precondition is supplied; see [MT5 read-only runbook](docs/MT5_READ_ONLY.md).
+
+Actual real-terminal smoke status for this patch: **NOT RUN**. No eligible explicitly opted-in local Demo Terminal configuration was supplied; unit tests and Windows import checks are not reported as a real-terminal pass.
 
 Do not add credentials to the repository. Copy variable names from `.env.example` only when local configuration is needed, keep values outside version control, and never configure an MT5 password. The Worker may inspect the account identifier/server returned by the already-open terminal only transiently to verify a masked/hashed binding; raw identifiers never belong in logs, Supabase, browser output, snapshots, prompts, or commits.
 

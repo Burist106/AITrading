@@ -4,6 +4,8 @@
 
 Build a safety-first XAU/USD trading research and Demo execution platform. The system is strictly `DEMO ONLY` until a separate future project explicitly changes that rule. No task in the current roadmap authorizes Live Trading.
 
+Current delivery status: Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. Milestone 3 is not started and is not authorized by the current task.
+
 ## Source-of-truth order
 
 When sources disagree, use this precedence:
@@ -96,6 +98,11 @@ Use current stable supported versions and lock dependencies. Document exact vers
 - Local safety state and reconciliation must be designed before Demo execution.
 - Tests must use fakes/adapters; CI must not require a running MT5 terminal.
 - Milestone 2 native access is Windows-only, serialized, uses an explicit local terminal path, and may call only `initialize`, `shutdown`, `version`, `last_error`, `terminal_info`, `account_info`, `symbols_get`, `symbol_info`, `symbol_info_tick`, `copy_rates_from_pos`, `copy_rates_range`, `positions_get`, `orders_get`, `history_orders_get`, and `history_deals_get`.
+- Pass the terminal executable path to `initialize()` as its sole positional argument. Never pass login, password, server, or any other credential parameter.
+- A broker symbol is canonical `XAUUSD` only when its reported base currency is `XAU` and profit currency is `USD`; names, descriptions, and aliases never establish that fact.
+- Observed symbol specifications are append-only evidence and never become a confirmed binding automatically. Missing or changed confirmation must fail closed.
+- Short tick polling, Position/active-Order polling, and full reconciliation use separate bounded cadences. History queries and reconciliation rows belong only to full reconciliation cycles, not each tick.
+- Terminal and other safety-sensitive booleans must be explicitly present and strictly boolean; missing, invalid, or false connection state blocks account verification.
 - `order_send`, `order_check`, `order_calc_profit`, `order_calc_margin`, `login`, `symbol_select`, and every `market_book_*` call remain forbidden. Do not use dynamic dispatch to bypass this boundary.
 
 ## Database requirements

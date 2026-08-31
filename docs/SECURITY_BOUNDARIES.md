@@ -52,7 +52,7 @@ The browser has no direct mutation repository. In development/test, the scenario
 5. The Worker role is NOLOGIN, separately claim-based, owner-scoped, and granted only read access needed for validation plus narrow Worker functions. Claim and incident actions return one typed safe-code envelope; the browser cannot execute them or read their lease data.
 6. Security-definer functions have an empty `search_path`, qualified references, a NOLOGIN owner, and explicit execution revocations/grants.
 7. Durable commands include typed JSON, expiry, attempts, retry scheduling, atomic claim, opaque lease, result, and event history.
-8. Five forced-RLS MT5 tables and seven Worker-only RPCs store sanitized observations and reconciliation evidence without direct Worker or browser DML.
+8. Six forced-RLS MT5 tables and seven Worker-only RPCs store sanitized observations, full-reconciliation results, and per-run history-query evidence without direct Worker or browser DML.
 9. Realtime is disabled. If introduced later as a wake-up mechanism, the committed database row remains command truth.
 
 The detailed principal, table, function, and credential matrices are in [SECURITY.md](./SECURITY.md). The schema and queue lifecycle are in [DATABASE_FOUNDATION.md](./DATABASE_FOUNDATION.md).

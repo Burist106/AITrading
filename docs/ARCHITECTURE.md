@@ -2,7 +2,7 @@
 
 ## Scope and invariants
 
-This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. It observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
+This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. Its current status is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. It observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against separately confirmed durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
 
 The following invariants apply at every boundary:
 
@@ -76,7 +76,11 @@ Numeric PostgreSQL values are authoritative for financial precision. Browser ari
 
 The database defines a dedicated NOLOGIN `aurum_worker` role for fake local claim tests and a future independently issued credential. Its JWT claim model includes an assigned owner and Worker identifier. It receives only secured Worker-function execution, never broad administrative authority and never a frontend session.
 
-The official `MetaTrader5==5.0.6090` dependency is optional and Windows/Python-3.13-only. Linux imports and gates work without it. Polling is cancellable, reconnect backoff is bounded, and every healthy transition requires Demo verification, a confirmed usable symbol, a fresh tick, and completed reconciliation. Reconciliation can report uncertainty but cannot create execution, close a Position, cancel an Order, or transition a command.
+The official `MetaTrader5==5.0.6090` dependency is optional and Windows/Python-3.13-only. Linux imports and gates work without it. The terminal path is the sole positional argument to `initialize()`; credentials and `login()` are outside the boundary. Safety-sensitive native booleans are strict and fail closed.
+
+Polling is cancellable and uses three bounded cadences: a lightweight tick/connection poll, a separate Position/active-Order poll, and a deliberately slower full safety reconciliation. Startup and reconnect require a successful full reconciliation before health can return to healthy. Only full cycles query bounded Order and Deal histories or create reconciliation rows. Routine tick upserts do not create security-audit rows. Reconnect backoff remains bounded and resets only after a verified cycle.
+
+Every healthy transition requires Demo verification, a fresh tick, a broker symbol whose native specification is actually base `XAU` and profit `USD`, and a completed reconciliation against an explicit immutable confirmed binding. A discovered or newly observed symbol/fingerprint is evidence only; it cannot confirm itself. Reconciliation can report uncertainty but cannot create execution, close a Position, cancel an Order, or transition a command.
 
 ## Supabase boundary
 
@@ -93,7 +97,7 @@ Local Supabase is the Milestone 1 control plane and operational database:
 - audit and event tables reject application update/delete attempts;
 - secured functions use a NOLOGIN owner, pinned empty `search_path`, qualified references, narrow grants, and no dynamic SQL;
 - Realtime is disabled and never required for queue correctness.
-- five forced-RLS MT5 tables hold sanitized account/specification/latest-tick/reconciliation evidence;
+- six forced-RLS MT5 tables hold sanitized account/specification/latest-tick/reconciliation evidence, including separate per-run Order and Deal history-query evidence;
 - seven additional Worker-only functions derive owner and Worker identity from claims, validate exact payloads, and write only those observations;
 - authenticated users may read only their own sanitized rows, while neither browser nor Worker receives direct observation DML.
 
@@ -116,4 +120,4 @@ The following remain deliberately absent:
 - Local Emergency Stop tray/CLI behavior;
 - P1 live analysis, AI/ML decisions, P2 analytics, cloud deployment, and all Live Trading capability.
 
-See `docs/IMPLEMENTATION_ROADMAP.md` for the authorized milestone order. Completing this milestone does not start Milestone 3.
+See `docs/IMPLEMENTATION_ROADMAP.md` for the authorized milestone order. This patch does not start or authorize Milestone 3.

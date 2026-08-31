@@ -2,7 +2,7 @@
 
 ## Scope
 
-Milestone 2 adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project.
+Milestone 2 is **IMPLEMENTED — PATCH AND CI VERIFICATION PENDING**. It adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project. Milestone 3 is not started or authorized.
 
 The invariant boundary is fixed:
 
@@ -26,7 +26,9 @@ The invariant boundary is fixed:
 
 The browser publishable key and authenticated user session are not Worker credentials. The dedicated Worker credential concept is independently rotatable and revocable and must remain outside frontend code, Git, snapshots, and logs. Milestone 1 tests fake claims only; it does not mint a production credential.
 
-The native terminal is reached only through an explicit local executable path. No password is accepted, `login()` is forbidden, and `initialize()` receives only the path. Raw account and server identifiers exist transiently during verification; persistence, incidents, logs, tests, and browser contracts receive only masks or one-way SHA-256 fingerprints.
+The native terminal is reached only through an explicit local executable path passed as the sole positional argument to `initialize()`. No password is accepted and `login()` is forbidden. Raw account and server identifiers exist transiently during verification; persistence, incidents, logs, tests, and browser contracts receive only masks or one-way SHA-256 fingerprints. Missing, invalid, or false terminal connection state fails closed before `account_info()`.
+
+The configured or confirmed broker name is not sufficient proof of XAU/USD. The native and contract boundaries require canonical `XAUUSD`, base `XAU`, and profit `USD`. Discovery creates candidates only. An observation is append-only evidence and never updates confirmation. The confirmed fingerprint and its owner actor/version metadata live on a separate immutable binding record; absent or changed confirmation blocks health until an explicitly authorized future/manual operation creates a new confirmed version.
 
 > Warning: the Supabase `service_role` must never be exposed to the browser and is not the Worker application design.
 
@@ -45,7 +47,7 @@ Every application table in `public` has RLS enabled and forced. No policy means 
 | `broker_orders`, `trade_executions`, `positions`, `position_events` | Own                                                                                                                   | None                                      | Read through reconciliation RPC only; no direct write |
 | `system_components`, `system_heartbeats`, `system_incidents`        | Own                                                                                                                   | None                                      | None; narrowly scoped Worker functions only           |
 | `audit_logs`                                                        | Own                                                                                                                   | None                                      | None; secured functions append records                |
-| MT5 observation and reconciliation tables                           | Own sanitized rows only                                                                                               | None                                      | None; seven owner-derived Worker RPCs only            |
+| MT5 observation, reconciliation, and history-evidence tables        | Own sanitized rows only                                                                                               | None                                      | None; seven owner-derived Worker RPCs only            |
 
 Owner policies compare `owner_id` with `(select auth.uid())`. Child rows use owner-aware composite foreign keys so RLS cannot hide a cross-owner referential-integrity defect. Cross-owner and anonymous cases are part of the database test suite even though the initial product is single-user.
 
@@ -69,6 +71,8 @@ Worker functions are limited to:
 - append narrowly typed operational history.
 
 There is no Worker function for broker submission, order creation, trade execution creation, or Position mutation.
+
+The Milestone 2 persistence adapter exposes only the seven observation/reconciliation RPC capabilities; it exposes no command claim, transition, or completion method. Full reconciliation completion atomically records exactly one bounded Order-history evidence record and one Deal-history evidence record. Mismatch append and completion lock the same owner-scoped parent run; completion requires the exact normalized persisted-child and payload mismatch sets, and completed runs reject new mismatch evidence. A successful empty tuple is explicit valid-empty evidence; native `None`, an incomplete window, or unknown coverage blocks healthy state. Routine latest-tick upserts remain bounded current telemetry and deliberately append no security-audit row.
 
 Claim and incident calls return exactly one typed, payload-free result envelope instead of overloading zero rows or `NULL` as an error signal. Claim codes distinguish `CLAIMED`, `NO_ELIGIBLE_COMMAND`, `INVALID_LEASE_DURATION`, and `WORKER_UNAUTHORIZED`; only the Worker-only successful envelope contains the opaque lease. Incident codes distinguish `CREATED`, `IDEMPOTENT_REPLAY`, `IDEMPOTENCY_CONFLICT`, field-specific invalid input, and unauthorized calls. An exact owner/request replay returns the existing incident identity, while changed canonical content on that key produces no mutation or audit row.
 
@@ -105,7 +109,7 @@ Worker result codes must use a bounded uppercase machine-code format. Result mes
 
 ## Append-only records and safe metadata
 
-Risk-policy versions, command events, Position events, and audit logs are immutable to application roles. Database triggers reject update and delete attempts in addition to withholding grants.
+Broker-symbol confirmation versions, MT5 history-query evidence, risk-policy versions, command events, Position events, and audit logs are immutable to application roles. Database triggers reject update and delete attempts in addition to withholding grants.
 
 Audit metadata is bounded and rejects secret-shaped keys such as tokens, passwords, credentials, cookies, authorization headers, raw exception dumps, and stacks. Audit fixtures contain only fictional identifiers and safe result context. Transactional authorization errors that PostgreSQL rolls back cannot create a durable row in the same transaction; those attempts belong in external Auth/platform logs.
 
