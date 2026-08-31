@@ -12,6 +12,7 @@ from aurum_worker.models.mt5 import (
     AccountObservation,
     AccountVerificationState,
     BrokerSymbolObservation,
+    ConfirmedSymbolBinding,
     DatabaseReconciliationState,
     LatestTickObservation,
     Mt5HealthSnapshot,
@@ -46,6 +47,9 @@ class InMemoryMt5ObservationPersistence(Mt5ObservationPersistencePort):
         default_factory=list
     )
     fail_operations: set[str] = field(default_factory=set)
+    _last_symbol_states: dict[tuple[str, str], tuple[str, str, str | None]] = field(
+        default_factory=dict, repr=False
+    )
 
     def _result(self, operation: str) -> str:
         if operation in self.fail_operations:
@@ -71,11 +75,19 @@ class InMemoryMt5ObservationPersistence(Mt5ObservationPersistencePort):
         self, observation: BrokerSymbolObservation, account_fingerprint: str
     ) -> str:
         result = self._result("record_symbol")
-        if not any(
-            current.specification_fingerprint == observation.specification_fingerprint
-            for current in self.symbols
-        ):
+        identity = (account_fingerprint, observation.broker_symbol)
+        state = (
+            observation.specification_fingerprint,
+            observation.usability_state.value,
+            (
+                observation.unusable_reason.value
+                if observation.unusable_reason is not None
+                else None
+            ),
+        )
+        if self._last_symbol_states.get(identity) != state:
             self.symbols.append(observation)
+            self._last_symbol_states[identity] = state
         return result
 
     def upsert_tick(
@@ -189,9 +201,21 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
         return value
 
     @staticmethod
-    def _boolean(response: dict[str, object], key: str) -> bool:
+    def _confirmed_binding(
+        response: dict[str, object], key: str
+    ) -> ConfirmedSymbolBinding | None:
+        if key not in response:
+            raise Mt5ReadFailure(
+                SafeMt5Error(
+                    reason_code=Mt5ReasonCode.DATABASE_REPORT_FAILED,
+                    safe_detail="Persistence RPC omitted confirmed binding state.",
+                    retryable=True,
+                )
+            )
         value = response.get(key)
-        if not isinstance(value, bool):
+        if value is None:
+            return None
+        if not isinstance(value, dict):
             raise Mt5ReadFailure(
                 SafeMt5Error(
                     reason_code=Mt5ReasonCode.DATABASE_REPORT_FAILED,
@@ -199,7 +223,16 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
                     retryable=True,
                 )
             )
-        return value
+        try:
+            return ConfirmedSymbolBinding.model_validate(value, strict=False)
+        except (TypeError, ValueError) as error:
+            raise Mt5ReadFailure(
+                SafeMt5Error(
+                    reason_code=Mt5ReasonCode.DATABASE_REPORT_FAILED,
+                    safe_detail="Persistence RPC returned invalid confirmed binding.",
+                    retryable=True,
+                )
+            ) from error
 
     def record_account(
         self,
@@ -258,18 +291,17 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
             executing_command_ids=self._string_set(response, "executing_command_ids"),
             account_fingerprint=self._optional_string(response, "account_fingerprint"),
             server_fingerprint=self._optional_string(response, "server_fingerprint"),
-            broker_symbol=self._optional_string(response, "broker_symbol"),
-            symbol_specification_fingerprint=self._optional_string(
-                response, "symbol_specification_fingerprint"
+            confirmed_symbol_binding=self._confirmed_binding(
+                response, "confirmed_symbol_binding"
             ),
-            history_window_complete=self._boolean(response, "history_window_complete"),
         )
 
     def begin_reconciliation(self, report: ReconciliationReport) -> str:
+        payload = report.model_dump(mode="json", exclude_none=False)
         return self._code(
             self._client.call(
                 "worker_begin_reconciliation",
-                {"report": report.model_dump(mode="json")},
+                {"report": payload},
             ),
             self._RECONCILIATION_START_CODES,
         )
@@ -289,10 +321,11 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
         )
 
     def complete_reconciliation(self, report: ReconciliationReport) -> str:
+        payload = report.model_dump(mode="json", exclude_none=False)
         return self._code(
             self._client.call(
                 "worker_complete_reconciliation",
-                {"report": report.model_dump(mode="json")},
+                {"report": payload},
             ),
             self._RECONCILIATION_COMPLETE_CODES,
         )

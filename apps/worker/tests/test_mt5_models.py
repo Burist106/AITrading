@@ -7,21 +7,28 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from mt5_factories import NOW, account, specification, tick
+from mt5_factories import NOW, account, candidate, specification, tick
 from pydantic import ValidationError
 
 from aurum_worker.models.mt5 import (
     AccountTradeMode,
     AccountVerificationState,
+    BrokerSymbolCandidate,
     BrokerSymbolObservation,
     CandleObservation,
     CandleRequest,
     CandleSeries,
     HealthState,
+    HistoryQueryEvidence,
+    HistoryQueryResultState,
     HistoryRequest,
     LatestTickObservation,
     Mt5ReasonCode,
     Mt5WorkerConfig,
+    ReconciliationCategory,
+    ReconciliationMismatch,
+    ReconciliationOutcome,
+    ReconciliationReport,
     SymbolUsabilityState,
     TickFreshness,
     Timeframe,
@@ -55,19 +62,44 @@ def test_configuration_reads_only_local_readonly_settings() -> None:
             "AURUM_MT5_TERMINAL_PATH": "C:/MT5/terminal64.exe",
             "AURUM_MT5_BROKER_SYMBOL": "XAUUSD",
             "AURUM_MT5_EXPECTED_ACCOUNT_FINGERPRINT": "mt5-account-v1:test",
+            "AURUM_MT5_SMOKE_CONFIRMED_SPECIFICATION_FINGERPRINT": ("mt5-spec-v1:test"),
             "AURUM_MT5_MAX_TICK_AGE_SECONDS": "12",
             "AURUM_MT5_MAX_CLOCK_DRIFT_SECONDS": "20",
             "AURUM_MT5_CANDLE_LIMIT": "200",
             "AURUM_MT5_HISTORY_WINDOW_HOURS": "12",
-            "AURUM_MT5_POLL_INTERVAL_SECONDS": "2.5",
+            "AURUM_MT5_TICK_POLL_SECONDS": "2.5",
+            "AURUM_MT5_POSITION_POLL_SECONDS": "20",
+            "AURUM_MT5_FULL_RECONCILIATION_SECONDS": "600",
             "AURUM_MT5_RECONNECT_MAX_SECONDS": "30",
             "AURUM_MT5_READONLY_SMOKE": "1",
         }
     )
     assert config.terminal_path == Path("C:/MT5/terminal64.exe")
-    assert config.poll_interval_seconds == Decimal("2.5")
+    assert config.tick_poll_seconds == Decimal("2.5")
+    assert config.position_poll_seconds == Decimal("20")
+    assert config.full_reconciliation_seconds == Decimal("600")
+    assert config.smoke_confirmed_specification_fingerprint == "mt5-spec-v1:test"
     assert config.readonly_smoke is True
     assert not any("password" in name.lower() for name in Mt5WorkerConfig.model_fields)
+
+    defaults = Mt5WorkerConfig.from_environ(
+        {
+            "AURUM_MT5_TICK_POLL_SECONDS": "",
+            "AURUM_MT5_POSITION_POLL_SECONDS": "",
+            "AURUM_MT5_FULL_RECONCILIATION_SECONDS": "",
+        }
+    )
+    assert defaults.tick_poll_seconds == Decimal("5")
+    assert defaults.position_poll_seconds == Decimal("15")
+    assert defaults.full_reconciliation_seconds == Decimal("600")
+
+
+def test_tick_poll_cadence_is_bounded_below_web_liveness_expiry() -> None:
+    assert Mt5WorkerConfig(
+        tick_poll_seconds=Decimal("30")
+    ).tick_poll_seconds == Decimal("30")
+    with pytest.raises(ValidationError):
+        Mt5WorkerConfig(tick_poll_seconds=Decimal("30.001"))
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), "-1", "0"])
@@ -180,6 +212,24 @@ def test_symbol_specification_validation_and_fingerprint_are_stable() -> None:
     assert invisible.unusable_reason is Mt5ReasonCode.SYMBOL_NOT_VISIBLE
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("base_currency", "EUR"), ("profit_currency", "JPY")],
+)
+def test_symbol_models_require_actual_xau_usd_currencies(
+    field: str, value: str
+) -> None:
+    observed = specification().model_dump(mode="python")
+    observed[field] = value
+    with pytest.raises(ValidationError):
+        BrokerSymbolObservation.model_validate(observed)
+
+    discovered = candidate().model_dump(mode="python")
+    discovered[field] = value
+    with pytest.raises(ValidationError):
+        BrokerSymbolCandidate.model_validate(discovered)
+
+
 def test_tick_requires_positive_ordered_prices_and_exact_spread() -> None:
     observed = tick()
     payload = observed.model_dump(mode="python")
@@ -250,6 +300,169 @@ def test_invalid_ohlc_and_unbounded_history_are_rejected() -> None:
         CandleObservation.model_validate(payload)
     with pytest.raises(ValidationError):
         HistoryRequest(start_at=NOW - timedelta(days=8), end_at=NOW)
+
+
+@pytest.mark.parametrize(
+    ("start_at", "end_at"),
+    [
+        (NOW, NOW),
+        (NOW, NOW - timedelta(seconds=1)),
+    ],
+)
+def test_history_requests_and_evidence_require_a_positive_window(
+    start_at: datetime, end_at: datetime
+) -> None:
+    with pytest.raises(ValidationError):
+        HistoryRequest(start_at=start_at, end_at=end_at)
+    with pytest.raises(ValidationError):
+        HistoryQueryEvidence(
+            history_kind="orders",
+            requested_start_at=start_at,
+            requested_end_at=end_at,
+            query_completed_at=None,
+            returned_count=0,
+            result_state=HistoryQueryResultState.WINDOW_UNKNOWN,
+            reason_code=Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE,
+        )
+
+
+def test_history_evidence_completion_cannot_precede_request_end() -> None:
+    with pytest.raises(ValidationError):
+        HistoryQueryEvidence(
+            history_kind="orders",
+            requested_start_at=NOW - timedelta(hours=1),
+            requested_end_at=NOW,
+            query_completed_at=NOW - timedelta(microseconds=1),
+            returned_count=0,
+            result_state=HistoryQueryResultState.EMPTY_VALID_RESULT,
+            reason_code=Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT,
+        )
+
+
+def test_empty_and_non_empty_history_success_use_distinct_reasons() -> None:
+    empty = HistoryQueryEvidence(
+        history_kind="orders",
+        requested_start_at=NOW - timedelta(hours=1),
+        requested_end_at=NOW,
+        query_completed_at=NOW,
+        returned_count=0,
+        result_state=HistoryQueryResultState.EMPTY_VALID_RESULT,
+        reason_code=Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT,
+    )
+    assert empty.reason_code is Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT
+
+    returned_at = NOW - timedelta(minutes=30)
+    non_empty = HistoryQueryEvidence(
+        history_kind="deals",
+        requested_start_at=NOW - timedelta(hours=1),
+        requested_end_at=NOW,
+        query_completed_at=NOW,
+        returned_count=1,
+        earliest_returned_at=returned_at,
+        latest_returned_at=returned_at,
+        result_state=HistoryQueryResultState.QUERY_SUCCEEDED,
+        reason_code=Mt5ReasonCode.HEALTHY,
+    )
+    assert non_empty.reason_code is Mt5ReasonCode.HEALTHY
+
+    with pytest.raises(ValidationError):
+        HistoryQueryEvidence(
+            history_kind="orders",
+            requested_start_at=NOW - timedelta(hours=1),
+            requested_end_at=NOW,
+            query_completed_at=NOW,
+            returned_count=0,
+            result_state=HistoryQueryResultState.EMPTY_VALID_RESULT,
+            reason_code=Mt5ReasonCode.HEALTHY,
+        )
+
+
+def _matched_reconciliation_report() -> ReconciliationReport:
+    def evidence(history_kind: str) -> HistoryQueryEvidence:
+        return HistoryQueryEvidence(
+            history_kind="orders" if history_kind == "orders" else "deals",
+            requested_start_at=NOW - timedelta(hours=1),
+            requested_end_at=NOW,
+            query_completed_at=NOW,
+            returned_count=0,
+            result_state=HistoryQueryResultState.EMPTY_VALID_RESULT,
+            reason_code=Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT,
+        )
+
+    return ReconciliationReport(
+        observed_at=NOW,
+        source="mt5",
+        adapter_version="test",
+        trace_id="trace-matched",
+        reconciliation_id="00000000-0000-4000-8000-000000000001",
+        started_at=NOW - timedelta(minutes=1),
+        completed_at=NOW,
+        outcome=ReconciliationOutcome.MATCHED,
+        reason_code=Mt5ReasonCode.HEALTHY,
+        account_fingerprint="mt5-account-v1:fixture",
+        server_fingerprint="mt5-server-v1:fixture",
+        broker_symbol="XAUUSD",
+        symbol_specification_fingerprint="mt5-spec-v1:fixture",
+        open_position_count=0,
+        active_order_count=0,
+        order_history_count=0,
+        deal_history_count=0,
+        order_history_evidence=evidence("orders"),
+        deal_history_evidence=evidence("deals"),
+    )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "account_fingerprint",
+        "server_fingerprint",
+        "broker_symbol",
+        "symbol_specification_fingerprint",
+    ],
+)
+def test_matched_reconciliation_requires_complete_identity(field: str) -> None:
+    payload = _matched_reconciliation_report().model_dump(mode="python")
+    payload[field] = None
+
+    with pytest.raises(ValidationError):
+        ReconciliationReport.model_validate(payload)
+
+
+@pytest.mark.parametrize("field", ["order_history_evidence", "deal_history_evidence"])
+def test_matched_reconciliation_requires_successful_history(field: str) -> None:
+    payload = _matched_reconciliation_report().model_dump(mode="python")
+    failed_evidence = payload[field]
+    assert isinstance(failed_evidence, dict)
+    failed_evidence["result_state"] = HistoryQueryResultState.QUERY_FAILED
+    failed_evidence["reason_code"] = Mt5ReasonCode.HISTORY_QUERY_FAILED
+
+    with pytest.raises(ValidationError):
+        ReconciliationReport.model_validate(payload)
+
+
+def test_matched_reconciliation_cannot_contain_mismatches() -> None:
+    payload = _matched_reconciliation_report().model_dump(mode="python")
+    payload["mismatches"] = (
+        ReconciliationMismatch(
+            category=ReconciliationCategory.ACCOUNT_CHANGED,
+            severity="critical",
+            resource_type="account",
+            resource_reference="mt5-account-v1:changed",
+            reason_code=Mt5ReasonCode.RECONCILIATION_INCOMPLETE,
+        ),
+    )
+
+    with pytest.raises(ValidationError):
+        ReconciliationReport.model_validate(payload)
+
+
+def test_matched_reconciliation_requires_healthy_reason() -> None:
+    payload = _matched_reconciliation_report().model_dump(mode="python")
+    payload["reason_code"] = Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+
+    with pytest.raises(ValidationError):
+        ReconciliationReport.model_validate(payload)
 
 
 def test_decimal_and_ticket_json_boundaries_remain_strings() -> None:

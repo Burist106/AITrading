@@ -33,6 +33,7 @@ class NativeModuleFake:
 
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.initialize_paths: list[str] = []
         self.initialize_result = True
         self.terminal_result: object | None = SimpleNamespace(
             connected=True, trade_allowed=False
@@ -77,6 +78,7 @@ class NativeModuleFake:
             expiration_mode=7,
             order_mode=127,
         )
+        self.symbol_catalog_result: object | None = None
         self.position_result: object | None = ()
         self.order_result: object | None = ()
         self.order_history_result: object | None = ()
@@ -86,8 +88,9 @@ class NativeModuleFake:
         self.max_active_terminal_calls = 0
         self._call_lock = threading.Lock()
 
-    def initialize(self, *, path: str) -> bool:
+    def initialize(self, path: str, /) -> bool:
         self.calls.append("initialize")
+        self.initialize_paths.append(path)
         assert Path(path).is_absolute()
         return self.initialize_result
 
@@ -120,16 +123,22 @@ class NativeModuleFake:
 
     def symbols_get(self) -> object:
         self.calls.append("symbols_get")
+        if self.symbol_catalog_result is not None:
+            return self.symbol_catalog_result
         return (self.symbol_result,) if self.symbol_result else None
 
     def symbol_info(self, symbol: str) -> object:
         self.calls.append("symbol_info")
-        assert symbol == "XAUUSD"
+        assert self.symbol_result is not None
+        result = cast(SimpleNamespace, self.symbol_result)
+        assert symbol == result.name
         return self.symbol_result
 
     def symbol_info_tick(self, symbol: str) -> object:
         self.calls.append("symbol_info_tick")
-        assert symbol == "XAUUSD"
+        assert self.symbol_result is not None
+        result = cast(SimpleNamespace, self.symbol_result)
+        assert symbol == result.name
         return self.tick_result
 
     def copy_rates_from_pos(
@@ -190,6 +199,19 @@ def native_adapter(tmp_path: Path, module: NativeModuleFake) -> MetaTrader5ReadA
     )
 
 
+def rate_row(open_at: datetime) -> dict[str, object]:
+    return {
+        "time": int(open_at.timestamp()),
+        "open": 2345.0,
+        "high": 2346.0,
+        "low": 2344.0,
+        "close": 2345.5,
+        "tick_volume": 100,
+        "spread": 20,
+        "real_volume": 0,
+    }
+
+
 def test_non_windows_import_and_missing_path_fail_closed(tmp_path: Path) -> None:
     adapter = MetaTrader5ReadAdapter(Mt5WorkerConfig(), platform="linux")
     with pytest.raises(Mt5ReadFailure) as raised:
@@ -248,6 +270,7 @@ def test_connect_account_and_disconnect_are_safe(tmp_path: Path) -> None:
     assert str(RAW_LOGIN) not in dumped
     assert RAW_SERVER not in dumped
     assert "must-not-cross-boundary" not in dumped
+    assert module.initialize_paths == [str((tmp_path / "terminal64.exe").resolve())]
     assert module.calls.count("shutdown") == 1
 
 
@@ -286,6 +309,15 @@ def test_initialize_and_terminal_info_failures_are_sanitized(tmp_path: Path) -> 
         adapter.connect(trace_id="test")
     assert initialize_failure.value.error.reason_code is Mt5ReasonCode.INITIALIZE_FAILED
     assert "raw native diagnostic" not in str(initialize_failure.value)
+    assert module.calls.count("shutdown") == 1
+
+    module = NativeModuleFake()
+    module.initialize_result = cast(bool, "true")
+    adapter = native_adapter(tmp_path, module)
+    with pytest.raises(Mt5ReadFailure) as invalid_initialize:
+        adapter.connect(trace_id="test")
+    assert invalid_initialize.value.error.reason_code is Mt5ReasonCode.INITIALIZE_FAILED
+    assert module.calls.count("shutdown") == 1
 
     module = NativeModuleFake()
     module.terminal_result = None
@@ -297,6 +329,64 @@ def test_initialize_and_terminal_info_failures_are_sanitized(tmp_path: Path) -> 
         is Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE
     )
     assert module.calls.count("shutdown") == 1
+
+
+@pytest.mark.parametrize(
+    ("terminal_result", "expected_reason"),
+    [
+        (
+            SimpleNamespace(connected=False, trade_allowed=False),
+            Mt5ReasonCode.TERMINAL_DISCONNECTED,
+        ),
+        (
+            SimpleNamespace(trade_allowed=False),
+            Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE,
+        ),
+        (
+            SimpleNamespace(connected="true", trade_allowed=False),
+            Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE,
+        ),
+        (
+            SimpleNamespace(connected=1, trade_allowed=False),
+            Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE,
+        ),
+        (
+            SimpleNamespace(connected=True, trade_allowed="false"),
+            Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE,
+        ),
+    ],
+)
+def test_terminal_connection_and_boolean_fields_fail_closed(
+    tmp_path: Path,
+    terminal_result: object,
+    expected_reason: Mt5ReasonCode,
+) -> None:
+    module = NativeModuleFake()
+    module.terminal_result = terminal_result
+    adapter = native_adapter(tmp_path, module)
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.connect(trace_id="test")
+
+    assert raised.value.error.reason_code is expected_reason
+    assert "account_info" not in module.calls
+    assert module.calls.count("shutdown") == 1
+
+
+def test_later_terminal_validation_failure_prevents_account_read(
+    tmp_path: Path,
+) -> None:
+    module = NativeModuleFake()
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="connect")
+    module.terminal_result = SimpleNamespace(trade_allowed=False)
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_terminal_info(trace_id="poll")
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE
+    assert "account_info" not in module.calls
+    adapter.disconnect()
 
 
 def test_all_native_calls_are_serialized(tmp_path: Path) -> None:
@@ -340,10 +430,111 @@ def test_symbol_tick_and_completed_candles_normalize_decimals(tmp_path: Path) ->
     assert candles.gaps == ()
 
 
+@pytest.mark.parametrize(
+    ("broker_symbol", "base_currency", "profit_currency"),
+    [
+        ("EURUSD", "EUR", "USD"),
+        ("BTCUSD", "BTC", "USD"),
+        ("XAUJPY", "XAU", "JPY"),
+        ("XAUUSD", "EUR", "USD"),
+        ("XAUUSD", "xau", "USD"),
+        ("XAUUSD", "XAU", "usd"),
+    ],
+)
+def test_configured_non_xauusd_specification_is_blocked(
+    tmp_path: Path,
+    broker_symbol: str,
+    base_currency: str,
+    profit_currency: str,
+) -> None:
+    module = NativeModuleFake()
+    result = cast(SimpleNamespace, module.symbol_result)
+    result.name = broker_symbol
+    result.currency_base = base_currency
+    result.currency_profit = profit_currency
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_symbol_specification(broker_symbol, trace_id="test")
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.SYMBOL_CANONICAL_MISMATCH
+    adapter.disconnect()
+
+
+def test_gold_alias_requires_actual_xauusd_specification(tmp_path: Path) -> None:
+    module = NativeModuleFake()
+    valid_gold = SimpleNamespace(**vars(cast(SimpleNamespace, module.symbol_result)))
+    valid_gold.name = "GOLD"
+    valid_gold.currency_margin = "EUR"
+    invalid_gold = SimpleNamespace(**vars(valid_gold))
+    invalid_gold.name = "GOLD.bad"
+    invalid_gold.currency_base = "EUR"
+    misleading_name = SimpleNamespace(**vars(valid_gold))
+    misleading_name.name = "XAUUSD.bad"
+    misleading_name.currency_profit = "JPY"
+    lowercase_gold = SimpleNamespace(**vars(valid_gold))
+    lowercase_gold.name = "GOLD.lowercase"
+    lowercase_gold.currency_base = "xau"
+    module.symbol_catalog_result = (
+        valid_gold,
+        invalid_gold,
+        misleading_name,
+        lowercase_gold,
+    )
+    module.symbol_result = valid_gold
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    candidates = adapter.list_symbol_candidates(trace_id="test")
+    specification = adapter.get_symbol_specification("GOLD", trace_id="test")
+
+    assert [candidate.broker_symbol for candidate in candidates] == ["GOLD"]
+    assert specification.canonical_symbol == "XAUUSD"
+    assert specification.base_currency == "XAU"
+    assert specification.profit_currency == "USD"
+    assert specification.margin_currency == "EUR"
+    adapter.disconnect()
+
+
+def test_margin_currency_is_validated_without_rewriting(tmp_path: Path) -> None:
+    module = NativeModuleFake()
+    result = cast(SimpleNamespace, module.symbol_result)
+    result.currency_margin = "eur"
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_symbol_specification("XAUUSD", trace_id="test")
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE
+    adapter.disconnect()
+
+
+def test_qualifying_symbol_candidate_requires_strict_visible_boolean(
+    tmp_path: Path,
+) -> None:
+    module = NativeModuleFake()
+    result = cast(SimpleNamespace, module.symbol_result)
+    result.visible = "true"
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.list_symbol_candidates(trace_id="test")
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE
+    adapter.disconnect()
+
+
 def test_current_candle_is_incomplete_and_non_monotonic_data_is_rejected(
     tmp_path: Path,
 ) -> None:
     module = NativeModuleFake()
+    module.rate_result = (
+        rate_row(NOW - timedelta(minutes=1)),
+        rate_row(NOW),
+    )
     adapter = native_adapter(tmp_path, module)
     adapter.connect(trace_id="test")
     current = adapter.get_candles(
@@ -354,16 +545,7 @@ def test_current_candle_is_incomplete_and_non_monotonic_data_is_rejected(
     )
     assert current.candles[-1].is_complete is False
 
-    valid_row = {
-        "time": int(NOW.timestamp()),
-        "open": 2345.0,
-        "high": 2346.0,
-        "low": 2344.0,
-        "close": 2345.5,
-        "tick_volume": 100,
-        "spread": 20,
-        "real_volume": 0,
-    }
+    valid_row = rate_row(NOW)
     module.rate_result = (
         valid_row,
         {**valid_row, "time": int(NOW.timestamp()) - 60},
@@ -378,6 +560,167 @@ def test_current_candle_is_incomplete_and_non_monotonic_data_is_rejected(
         adapter.get_candles(
             "XAUUSD", Timeframe.M1, CandleRequest(count=2), trace_id="test"
         )
+    adapter.disconnect()
+
+
+@pytest.mark.parametrize(
+    ("timeframe", "duration_seconds"),
+    [
+        (Timeframe.M1, 60),
+        (Timeframe.M5, 300),
+        (Timeframe.M15, 900),
+        (Timeframe.H1, 3_600),
+    ],
+)
+def test_candle_completeness_uses_timeframe_bucket_boundaries(
+    tmp_path: Path,
+    timeframe: Timeframe,
+    duration_seconds: int,
+) -> None:
+    module = NativeModuleFake()
+    closed_open = NOW - timedelta(seconds=duration_seconds)
+    module.rate_result = (rate_row(closed_open), rate_row(NOW))
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    current = adapter.get_candles(
+        "XAUUSD",
+        timeframe,
+        CandleRequest(start_position=0, count=2, include_current=True),
+        trace_id="test",
+    )
+    assert [candle.is_complete for candle in current.candles] == [True, False]
+
+    completed_only = adapter.get_candles(
+        "XAUUSD",
+        timeframe,
+        CandleRequest(start_position=1, count=2),
+        trace_id="test",
+    )
+    assert [candle.open_at for candle in completed_only.candles] == [closed_open]
+
+    module.rate_result = (
+        rate_row(closed_open - timedelta(seconds=duration_seconds)),
+        rate_row(closed_open),
+    )
+    historical_position = adapter.get_candles(
+        "XAUUSD",
+        timeframe,
+        CandleRequest(start_position=1, count=2, include_current=True),
+        trace_id="test",
+    )
+    assert all(candle.is_complete for candle in historical_position.candles)
+
+    historical_range = adapter.get_candles(
+        "XAUUSD",
+        timeframe,
+        CandleRequest(
+            count=2,
+            include_current=True,
+            range_start=closed_open - timedelta(seconds=duration_seconds),
+            range_end=closed_open,
+        ),
+        trace_id="test",
+    )
+    assert all(candle.is_complete for candle in historical_range.candles)
+    adapter.disconnect()
+
+
+def test_candle_range_filters_only_the_active_bucket(tmp_path: Path) -> None:
+    module = NativeModuleFake()
+    module.rate_result = (
+        rate_row(NOW - timedelta(minutes=1)),
+        rate_row(NOW),
+    )
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+    retained = adapter.get_candles(
+        "XAUUSD",
+        Timeframe.M1,
+        CandleRequest(
+            count=2,
+            include_current=True,
+            range_start=NOW - timedelta(minutes=1),
+            range_end=NOW,
+        ),
+        trace_id="test",
+    )
+    filtered = adapter.get_candles(
+        "XAUUSD",
+        Timeframe.M1,
+        CandleRequest(
+            count=2,
+            range_start=NOW - timedelta(minutes=1),
+            range_end=NOW,
+        ),
+        trace_id="test",
+    )
+
+    assert [candle.is_complete for candle in retained.candles] == [True, False]
+    assert [candle.open_at for candle in filtered.candles] == [
+        NOW - timedelta(minutes=1)
+    ]
+    adapter.disconnect()
+
+
+def test_invalid_candle_timestamp_is_a_bounded_read_failure(tmp_path: Path) -> None:
+    module = NativeModuleFake()
+    module.rate_result = ({**rate_row(NOW), "time": "invalid"},)
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_candles(
+            "XAUUSD",
+            Timeframe.M1,
+            CandleRequest(start_position=0, count=1, include_current=True),
+            trace_id="test",
+        )
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.CANDLE_DATA_INVALID
+    adapter.disconnect()
+
+
+def test_extreme_candle_timestamp_is_a_bounded_read_failure(tmp_path: Path) -> None:
+    module = NativeModuleFake()
+    module.rate_result = ({**rate_row(NOW), "time": 10**100},)
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_candles(
+            "XAUUSD",
+            Timeframe.M1,
+            CandleRequest(start_position=0, count=1, include_current=True),
+            trace_id="test",
+        )
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.CANDLE_DATA_INVALID
+    adapter.disconnect()
+
+
+def test_candle_gap_detection_runs_after_active_bucket_filtering(
+    tmp_path: Path,
+) -> None:
+    module = NativeModuleFake()
+    module.rate_result = (
+        rate_row(NOW - timedelta(minutes=3)),
+        rate_row(NOW - timedelta(minutes=1)),
+        rate_row(NOW),
+    )
+    adapter = native_adapter(tmp_path, module)
+    adapter.connect(trace_id="test")
+
+    series = adapter.get_candles(
+        "XAUUSD",
+        Timeframe.M1,
+        CandleRequest(start_position=1, count=3),
+        trace_id="test",
+    )
+
+    assert len(series.candles) == 2
+    assert len(series.gaps) == 1
+    assert series.gaps[0].missing_intervals == 1
     adapter.disconnect()
 
 
@@ -614,6 +957,18 @@ def test_native_adapter_ast_is_static_and_allowlisted() -> None:
         and node.func.value.id == "module"
     }
     assert referenced == allowed
+    initialize_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "module"
+        and node.func.attr == "initialize"
+    ]
+    assert len(initialize_calls) == 1
+    assert len(initialize_calls[0].args) == 1
+    assert initialize_calls[0].keywords == []
     assert not any(
         isinstance(node, (ast.Import, ast.ImportFrom))
         and "MetaTrader5" in ast.unparse(node)

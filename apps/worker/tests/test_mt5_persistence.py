@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import pytest
 from mt5_factories import NOW
@@ -8,9 +9,13 @@ from mt5_factories import NOW
 from aurum_worker.adapters.persistence_mt5 import WorkerRpcMt5ObservationPersistence
 from aurum_worker.models.mt5 import (
     HealthState,
+    HistoryQueryEvidence,
+    HistoryQueryResultState,
     Mt5HealthSnapshot,
     Mt5ReadFailure,
     Mt5ReasonCode,
+    ReconciliationOutcome,
+    ReconciliationReport,
 )
 
 
@@ -30,6 +35,50 @@ class RecordingClient:
         )
 
 
+def reconciliation_report(broker_symbol: str | None) -> ReconciliationReport:
+    def evidence(history_kind: str) -> HistoryQueryEvidence:
+        return HistoryQueryEvidence(
+            history_kind="orders" if history_kind == "orders" else "deals",
+            requested_start_at=NOW - timedelta(hours=1),
+            requested_end_at=NOW,
+            query_completed_at=NOW,
+            returned_count=0,
+            result_state=HistoryQueryResultState.EMPTY_VALID_RESULT,
+            reason_code=Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT,
+        )
+
+    matched = broker_symbol is not None
+    return ReconciliationReport(
+        observed_at=NOW,
+        source="mt5",
+        adapter_version="test",
+        trace_id="trace",
+        reconciliation_id="00000000-0000-4000-8000-000000000001",
+        started_at=NOW - timedelta(minutes=1),
+        completed_at=NOW,
+        outcome=(
+            ReconciliationOutcome.MATCHED
+            if matched
+            else ReconciliationOutcome.INCOMPLETE
+        ),
+        reason_code=(
+            Mt5ReasonCode.HEALTHY
+            if matched
+            else Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+        ),
+        account_fingerprint="mt5-account-v1:fixture",
+        server_fingerprint="mt5-server-v1:fixture",
+        broker_symbol=broker_symbol,
+        symbol_specification_fingerprint="mt5-spec-v1:fixture",
+        open_position_count=0,
+        active_order_count=0,
+        order_history_count=0,
+        deal_history_count=0,
+        order_history_evidence=evidence("orders"),
+        deal_history_evidence=evidence("deals"),
+    )
+
+
 def test_reconciliation_state_rpc_is_narrowed_before_strict_validation() -> None:
     client = RecordingClient(
         responses={
@@ -39,15 +88,24 @@ def test_reconciliation_state_rpc_is_narrowed_before_strict_validation() -> None
                 "executing_command_ids": ["command-1"],
                 "account_fingerprint": "mt5-account-v1:fixture",
                 "server_fingerprint": "mt5-server-v1:fixture",
-                "broker_symbol": "XAUUSD",
-                "symbol_specification_fingerprint": "mt5-spec-v1:fixture",
-                "history_window_complete": True,
+                "confirmed_symbol_binding": {
+                    "owner_id": "00000000-0000-4000-8000-000000000201",
+                    "trading_account_id": "00000000-0000-4000-8000-000000000301",
+                    "canonical_symbol": "XAUUSD",
+                    "broker_symbol": "XAUUSD",
+                    "confirmed_specification_fingerprint": "mt5-spec-v1:fixture",
+                    "confirmation_status": "confirmed",
+                    "confirmed_at": NOW.isoformat(),
+                    "confirmed_by": "00000000-0000-4000-8000-000000000201",
+                    "version": 1,
+                },
             }
         }
     )
     state = WorkerRpcMt5ObservationPersistence(client).load_reconciliation_state()
     assert state.position_tickets == frozenset({"1001"})
-    assert state.broker_symbol == "XAUUSD"
+    assert state.confirmed_symbol_binding is not None
+    assert state.confirmed_symbol_binding.broker_symbol == "XAUUSD"
 
 
 def test_invalid_reconciliation_rpc_envelope_fails_closed() -> None:
@@ -61,7 +119,7 @@ def test_invalid_reconciliation_rpc_envelope_fails_closed() -> None:
     assert raised.value.error.reason_code is Mt5ReasonCode.DATABASE_REPORT_FAILED
 
 
-def test_missing_reconciliation_completeness_flag_fails_closed() -> None:
+def test_missing_confirmed_binding_envelope_fails_closed() -> None:
     client = RecordingClient(
         responses={
             "worker_read_mt5_reconciliation_state": {
@@ -76,6 +134,47 @@ def test_missing_reconciliation_completeness_flag_fails_closed() -> None:
         WorkerRpcMt5ObservationPersistence(client).load_reconciliation_state()
 
     assert raised.value.error.reason_code is Mt5ReasonCode.DATABASE_REPORT_FAILED
+
+
+def test_explicit_absent_confirmed_binding_is_preserved() -> None:
+    client = RecordingClient(
+        responses={
+            "worker_read_mt5_reconciliation_state": {
+                "position_tickets": [],
+                "active_order_tickets": [],
+                "executing_command_ids": [],
+                "account_fingerprint": None,
+                "server_fingerprint": None,
+                "confirmed_symbol_binding": None,
+            }
+        }
+    )
+
+    state = WorkerRpcMt5ObservationPersistence(client).load_reconciliation_state()
+
+    assert state.confirmed_symbol_binding is None
+
+
+@pytest.mark.parametrize("broker_symbol", ["XAUUSD", None])
+def test_reconciliation_rpcs_include_optional_broker_symbol(
+    broker_symbol: str | None,
+) -> None:
+    client = RecordingClient()
+    persistence = WorkerRpcMt5ObservationPersistence(client)
+    report = reconciliation_report(broker_symbol)
+
+    persistence.begin_reconciliation(report)
+    persistence.complete_reconciliation(report)
+
+    assert [call[0] for call in client.calls] == [
+        "worker_begin_reconciliation",
+        "worker_complete_reconciliation",
+    ]
+    for _, parameters in client.calls:
+        payload = parameters["report"]
+        assert isinstance(payload, dict)
+        assert "broker_symbol" in payload
+        assert payload["broker_symbol"] == broker_symbol
 
 
 def test_denied_write_rpc_result_fails_closed_without_echoing_server_code() -> None:

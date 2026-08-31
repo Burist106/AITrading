@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from threading import RLock
 from types import TracebackType
-from typing import Protocol, Self, cast
+from typing import Literal, Protocol, Self, cast
 
 from aurum_worker.adapters.protocols import Mt5ReadPort
 from aurum_worker.models.mt5 import (
@@ -39,7 +39,9 @@ from aurum_worker.models.mt5 import (
 from aurum_worker.mt5_safety import (
     account_fingerprint,
     candle_gaps,
+    candle_is_complete,
     decimal_from_native,
+    is_canonical_xauusd,
     mask_login,
     mask_server,
     sanitize_comment,
@@ -59,7 +61,7 @@ class NativeMt5Module(Protocol):
     TIMEFRAME_M15: int
     TIMEFRAME_H1: int
 
-    def initialize(self, *, path: str) -> bool: ...
+    def initialize(self, path: str, /) -> bool: ...
 
     def shutdown(self) -> None: ...
 
@@ -110,6 +112,22 @@ def _required(raw: object, name: str) -> object:
     value = _field(raw, name)
     if value is None:
         raise ValueError(f"required field unavailable: {name}")
+    return value
+
+
+def _required_bool(raw: object, name: str) -> bool:
+    value = _required(raw, name)
+    if type(value) is not bool:
+        raise ValueError(f"required boolean field invalid: {name}")
+    return value
+
+
+def _optional_bool(raw: object, name: str) -> bool | None:
+    value = _field(raw, name)
+    if value is None:
+        return None
+    if type(value) is not bool:
+        raise ValueError(f"optional boolean field invalid: {name}")
     return value
 
 
@@ -201,21 +219,24 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
         else:
             version_text = str(version)[:80]
             build = None
-        return TerminalObservation(
-            observed_at=self._clock(),
-            source="mt5",
-            adapter_version=ADAPTER_VERSION,
-            trace_id=trace_id,
-            connected=bool(_field(raw, "connected", True)),
-            platform="windows",
-            terminal_version=version_text,
-            terminal_build=build,
-            trade_allowed=(
-                bool(_field(raw, "trade_allowed"))
-                if _field(raw, "trade_allowed") is not None
-                else None
-            ),
-        )
+        try:
+            return TerminalObservation(
+                observed_at=self._clock(),
+                source="mt5",
+                adapter_version=ADAPTER_VERSION,
+                trace_id=trace_id,
+                connected=_required_bool(raw, "connected"),
+                platform="windows",
+                terminal_version=version_text,
+                terminal_build=build,
+                trade_allowed=_optional_bool(raw, "trade_allowed"),
+            )
+        except (TypeError, ValueError) as error:
+            raise self._failure(
+                Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE,
+                "Terminal connection state could not be normalized safely.",
+                retryable=True,
+            ) from error
 
     def connect(self, *, trace_id: str) -> TerminalObservation:
         if self._platform != "win32":
@@ -244,10 +265,11 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     "Another Worker adapter owns process-global MT5 state.",
                     retryable=True,
                 )
-            initialized = False
+            initialization_attempted = False
             try:
-                initialized = bool(module.initialize(path=str(path)))
-                if not initialized:
+                initialization_attempted = True
+                initialized = module.initialize(str(path))
+                if initialized is not True:
                     code = _safe_code(module.last_error())
                     suffix = f" Native code {code}." if code is not None else ""
                     raise self._failure(
@@ -274,8 +296,11 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                 self._terminal = terminal
                 return terminal
             except BaseException:
-                if initialized:
-                    module.shutdown()
+                if initialization_attempted:
+                    try:
+                        module.shutdown()
+                    except Exception:
+                        pass
                 self._connected = False
                 self._terminal = None
                 if type(self)._active_owner == id(self):
@@ -317,6 +342,12 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     retryable=True,
                 )
             terminal = self._terminal_observation(module, raw, trace_id)
+            if not terminal.connected:
+                raise self._failure(
+                    Mt5ReasonCode.TERMINAL_DISCONNECTED,
+                    "Terminal reported a disconnected state.",
+                    retryable=True,
+                )
             self._terminal = terminal
             return terminal
 
@@ -380,32 +411,33 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                 )
             candidates = []
             for raw in cast(Iterable[object], raw_symbols):
-                name = str(_field(raw, "name", ""))
+                name = str(_field(raw, "name", "")).strip()
                 description = sanitize_comment(_field(raw, "description", ""))
-                base = str(_field(raw, "currency_base", "") or "").upper()
-                profit = str(_field(raw, "currency_profit", "") or "").upper()
-                if not (
-                    name.upper() == "XAUUSD"
-                    or (base == "XAU" and profit == "USD")
-                    or "GOLD" in description.upper()
-                    or "XAU" in name.upper()
-                ):
+                base = str(_field(raw, "currency_base", "") or "").strip()
+                profit = str(_field(raw, "currency_profit", "") or "").strip()
+                if not is_canonical_xauusd("XAUUSD", base, profit):
                     continue
-                candidates.append(
-                    BrokerSymbolCandidate(
-                        observed_at=self._clock(),
-                        source="mt5",
-                        adapter_version=ADAPTER_VERSION,
-                        trace_id=trace_id,
-                        broker_symbol=name,
-                        symbol_path=sanitize_comment(_field(raw, "path", "")),
-                        description=description,
-                        base_currency=base or None,
-                        profit_currency=profit or None,
-                        exact_name=name.upper() == "XAUUSD",
-                        visible=bool(_field(raw, "visible", False)),
+                try:
+                    candidates.append(
+                        BrokerSymbolCandidate(
+                            observed_at=self._clock(),
+                            source="mt5",
+                            adapter_version=ADAPTER_VERSION,
+                            trace_id=trace_id,
+                            broker_symbol=name,
+                            symbol_path=sanitize_comment(_field(raw, "path", "")),
+                            description=description,
+                            base_currency=cast(Literal["XAU"], base),
+                            profit_currency=cast(Literal["USD"], profit),
+                            exact_name=name.upper() == "XAUUSD",
+                            visible=_required_bool(raw, "visible"),
+                        )
                     )
-                )
+                except (TypeError, ValueError) as error:
+                    raise self._failure(
+                        Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE,
+                        "A qualifying symbol candidate could not be normalized safely.",
+                    ) from error
             return candidates
 
     def get_symbol_specification(
@@ -420,7 +452,7 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     "Configured broker symbol was not found.",
                 )
             try:
-                visible = bool(_required(raw, "visible"))
+                visible = _required_bool(raw, "visible")
                 trade_mode_code = int(cast(int | str, _required(raw, "trade_mode")))
                 trade_mode = {
                     0: SymbolTradeMode.DISABLED,
@@ -429,14 +461,21 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     3: SymbolTradeMode.CLOSE_ONLY,
                     4: SymbolTradeMode.FULL,
                 }.get(trade_mode_code, SymbolTradeMode.UNKNOWN)
+                base_currency = str(_required(raw, "currency_base")).strip()
+                profit_currency = str(_required(raw, "currency_profit")).strip()
+                if not is_canonical_xauusd("XAUUSD", base_currency, profit_currency):
+                    raise self._failure(
+                        Mt5ReasonCode.SYMBOL_CANONICAL_MISMATCH,
+                        "Configured broker symbol is not canonical XAU/USD.",
+                    )
                 material: dict[str, object] = {
                     "canonical_symbol": "XAUUSD",
                     "broker_symbol": broker_symbol,
                     "symbol_path": sanitize_comment(_required(raw, "path")),
                     "description": sanitize_comment(_required(raw, "description")),
-                    "base_currency": str(_required(raw, "currency_base")).upper(),
-                    "profit_currency": str(_required(raw, "currency_profit")).upper(),
-                    "margin_currency": str(_required(raw, "currency_margin")).upper(),
+                    "base_currency": base_currency,
+                    "profit_currency": profit_currency,
+                    "margin_currency": str(_required(raw, "currency_margin")).strip(),
                     "digits": int(cast(int | str, _required(raw, "digits"))),
                     "point": decimal_from_native(
                         _required(raw, "point"), positive=True
@@ -637,48 +676,61 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     Mt5ReasonCode.CANDLE_DATA_INVALID,
                     "Candle query returned more rows than the configured limit.",
                 )
-            most_recent = max(
-                (int(cast(int | str, _required(row, "time"))) for row in rows),
-                default=None,
-            )
             try:
-                candles = tuple(
-                    CandleObservation(
-                        observed_at=self._clock(),
-                        source="mt5",
-                        adapter_version=ADAPTER_VERSION,
-                        trace_id=trace_id,
-                        symbol=broker_symbol,
+                observed_at = self._clock()
+                normalized = tuple(
+                    self._candle_observation(
+                        row,
+                        broker_symbol=broker_symbol,
                         timeframe=timeframe,
-                        open_at=utc_from_epoch(
-                            cast(int | float, _required(row, "time"))
-                        ),
-                        open=decimal_from_native(_required(row, "open"), positive=True),
-                        high=decimal_from_native(_required(row, "high"), positive=True),
-                        low=decimal_from_native(_required(row, "low"), positive=True),
-                        close=decimal_from_native(
-                            _required(row, "close"), positive=True
-                        ),
-                        tick_volume=decimal_from_native(_required(row, "tick_volume")),
-                        spread=decimal_from_native(_required(row, "spread")),
-                        real_volume=decimal_from_native(_required(row, "real_volume")),
-                        is_complete=not (
-                            request.include_current
-                            and int(cast(int | str, _required(row, "time")))
-                            == most_recent
-                        ),
+                        trace_id=trace_id,
+                        observed_at=observed_at,
                     )
                     for row in rows
+                )
+                CandleSeries(candles=normalized)
+                candles = (
+                    normalized
+                    if request.include_current
+                    else tuple(candle for candle in normalized if candle.is_complete)
                 )
                 return CandleSeries(
                     candles=candles,
                     gaps=candle_gaps(candles, timeframe),
                 )
-            except (TypeError, ValueError) as error:
+            except (OSError, OverflowError, TypeError, ValueError) as error:
                 raise self._failure(
                     Mt5ReasonCode.CANDLE_DATA_INVALID,
                     "Candle data is inconsistent.",
                 ) from error
+
+    def _candle_observation(
+        self,
+        row: object,
+        *,
+        broker_symbol: str,
+        timeframe: Timeframe,
+        trace_id: str,
+        observed_at: datetime,
+    ) -> CandleObservation:
+        open_at = utc_from_epoch(cast(int | float, _required(row, "time")))
+        return CandleObservation(
+            observed_at=observed_at,
+            source="mt5",
+            adapter_version=ADAPTER_VERSION,
+            trace_id=trace_id,
+            symbol=broker_symbol,
+            timeframe=timeframe,
+            open_at=open_at,
+            open=decimal_from_native(_required(row, "open"), positive=True),
+            high=decimal_from_native(_required(row, "high"), positive=True),
+            low=decimal_from_native(_required(row, "low"), positive=True),
+            close=decimal_from_native(_required(row, "close"), positive=True),
+            tick_volume=decimal_from_native(_required(row, "tick_volume")),
+            spread=decimal_from_native(_required(row, "spread")),
+            real_volume=decimal_from_native(_required(row, "real_volume")),
+            is_complete=candle_is_complete(open_at, timeframe, observed_at),
+        )
 
     def get_open_positions(self, *, trace_id: str) -> list[OpenPositionObservation]:
         with self._process_lock:

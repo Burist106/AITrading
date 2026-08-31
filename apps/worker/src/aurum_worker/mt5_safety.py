@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
 from aurum_worker.models.mt5 import (
@@ -75,11 +75,11 @@ def align_to_step(value: Decimal, step: Decimal) -> Decimal:
 def utc_from_epoch(seconds: int | float | Decimal) -> datetime:
     try:
         value = Decimal(str(seconds))
-    except InvalidOperation as error:
+        if not value.is_finite() or value <= 0:
+            raise ValueError("invalid epoch")
+        return datetime.fromtimestamp(float(value), tz=UTC)
+    except (InvalidOperation, OSError, OverflowError, ValueError) as error:
         raise ValueError("invalid epoch") from error
-    if not value.is_finite() or value <= 0:
-        raise ValueError("invalid epoch")
-    return datetime.fromtimestamp(float(value), tz=UTC)
 
 
 def utc_from_epoch_milliseconds(milliseconds: int) -> datetime:
@@ -200,6 +200,40 @@ def specification_fingerprint(specification: dict[str, object]) -> str:
     return f"mt5-spec-v1:{hashlib.sha256(canonical.encode()).hexdigest()}"
 
 
+def is_canonical_xauusd(
+    canonical_symbol: str, base_currency: str | None, profit_currency: str | None
+) -> bool:
+    """Return whether an observed broker specification is truly XAU/USD."""
+
+    return (
+        canonical_symbol == "XAUUSD"
+        and base_currency == "XAU"
+        and profit_currency == "USD"
+    )
+
+
+def timeframe_duration_seconds(timeframe: Timeframe) -> int:
+    """Return the canonical UTC bucket duration for a supported timeframe."""
+
+    try:
+        return _TIMEFRAME_SECONDS[timeframe]
+    except KeyError as error:
+        raise ValueError("unsupported candle timeframe") from error
+
+
+def candle_is_complete(
+    open_at: datetime, timeframe: Timeframe, current_utc_time: datetime
+) -> bool:
+    """Classify a candle from its close boundary, independent of result position."""
+
+    if open_at.tzinfo is None or open_at.utcoffset() is None:
+        raise ValueError("candle open time must be timezone-aware")
+    if current_utc_time.tzinfo is None or current_utc_time.utcoffset() is None:
+        raise ValueError("current time must be timezone-aware")
+    close_boundary = open_at + timedelta(seconds=timeframe_duration_seconds(timeframe))
+    return close_boundary <= current_utc_time
+
+
 def broker_specification_material(
     observation: BrokerSymbolObservation,
 ) -> dict[str, object]:
@@ -224,7 +258,7 @@ def broker_specification_material(
 def candle_gaps(
     candles: tuple[CandleObservation, ...], timeframe: Timeframe
 ) -> tuple[CandleGap, ...]:
-    expected = _TIMEFRAME_SECONDS[timeframe]
+    expected = timeframe_duration_seconds(timeframe)
     gaps: list[CandleGap] = []
     for previous, current in zip(candles, candles[1:], strict=False):
         difference = int((current.open_at - previous.open_at).total_seconds())

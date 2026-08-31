@@ -12,6 +12,7 @@ from aurum_worker.models.mt5 import (
     BrokerSymbolObservation,
     CandleObservation,
     CandleSeries,
+    ConfirmedSymbolBinding,
     HistoricalDealObservation,
     HistoricalOrderObservation,
     LatestTickObservation,
@@ -119,6 +120,25 @@ def specification(
             else Mt5ReasonCode.SYMBOL_NOT_VISIBLE
         ),
         raw_diagnostic_codes={"trade_mode": 4},
+    )
+
+
+def confirmed_binding(
+    fingerprint: str = "mt5-spec-v1:fixture",
+    *,
+    broker_symbol: str = "XAUUSD",
+    version: int = 1,
+) -> ConfirmedSymbolBinding:
+    return ConfirmedSymbolBinding(
+        owner_id="00000000-0000-4000-8000-000000000201",
+        trading_account_id="00000000-0000-4000-8000-000000000301",
+        canonical_symbol="XAUUSD",
+        broker_symbol=broker_symbol,
+        confirmed_specification_fingerprint=fingerprint,
+        confirmation_status="confirmed",
+        confirmed_at=NOW,
+        confirmed_by="00000000-0000-4000-8000-000000000201",
+        version=version,
     )
 
 

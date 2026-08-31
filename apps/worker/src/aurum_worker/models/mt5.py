@@ -26,6 +26,19 @@ SafeIdentifier = Annotated[
     StringConstraints(strip_whitespace=True, min_length=1, max_length=160),
 ]
 TicketIdentifier = Annotated[str, StringConstraints(pattern=r"^[0-9]+$", max_length=32)]
+SpecificationFingerprint = Annotated[
+    str,
+    StringConstraints(pattern=r"^mt5-spec-v1:[A-Za-z0-9:_-]{4,128}$"),
+]
+UuidIdentifier = Annotated[
+    str,
+    StringConstraints(
+        pattern=(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+            r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        )
+    ),
+]
 
 
 class Mt5Model(BaseModel):
@@ -85,7 +98,9 @@ class Mt5ReasonCode(StrEnum):
     SYMBOL_NOT_FOUND = "SYMBOL_NOT_FOUND"
     SYMBOL_AMBIGUOUS = "SYMBOL_AMBIGUOUS"
     SYMBOL_NOT_VISIBLE = "SYMBOL_NOT_VISIBLE"
+    SYMBOL_CANONICAL_MISMATCH = "SYMBOL_CANONICAL_MISMATCH"
     SYMBOL_SPEC_INCOMPLETE = "SYMBOL_SPEC_INCOMPLETE"
+    SYMBOL_SPEC_CONFIRMATION_REQUIRED = "SYMBOL_SPEC_CONFIRMATION_REQUIRED"
     SYMBOL_SPEC_CHANGED = "SYMBOL_SPEC_CHANGED"
     TICK_UNAVAILABLE = "TICK_UNAVAILABLE"
     TICK_INVALID = "TICK_INVALID"
@@ -94,6 +109,7 @@ class Mt5ReasonCode(StrEnum):
     CLOCK_DRIFT_EXCEEDED = "CLOCK_DRIFT_EXCEEDED"
     CANDLE_DATA_INVALID = "CANDLE_DATA_INVALID"
     CANDLE_DATA_STALE = "CANDLE_DATA_STALE"
+    HISTORY_EMPTY_VALID_RESULT = "HISTORY_EMPTY_VALID_RESULT"
     HISTORY_QUERY_FAILED = "HISTORY_QUERY_FAILED"
     HISTORY_WINDOW_INCOMPLETE = "HISTORY_WINDOW_INCOMPLETE"
     RECONCILIATION_INCOMPLETE = "RECONCILIATION_INCOMPLETE"
@@ -152,22 +168,39 @@ class ReconciliationCategory(StrEnum):
     EXECUTION_RESULT_UNCERTAIN = "EXECUTION_RESULT_UNCERTAIN"
     ACCOUNT_CHANGED = "ACCOUNT_CHANGED"
     SERVER_CHANGED = "SERVER_CHANGED"
+    SYMBOL_SPEC_CONFIRMATION_REQUIRED = "SYMBOL_SPEC_CONFIRMATION_REQUIRED"
     SYMBOL_SPEC_CHANGED = "SYMBOL_SPEC_CHANGED"
+    HISTORY_QUERY_FAILED = "HISTORY_QUERY_FAILED"
     HISTORY_WINDOW_INCOMPLETE = "HISTORY_WINDOW_INCOMPLETE"
     CLOCK_INCONSISTENCY = "CLOCK_INCONSISTENCY"
+
+
+class HistoryQueryResultState(StrEnum):
+    QUERY_SUCCEEDED = "query_succeeded"
+    EMPTY_VALID_RESULT = "empty_valid_result"
+    QUERY_FAILED = "query_failed"
+    WINDOW_INCOMPLETE = "window_incomplete"
+    WINDOW_UNKNOWN = "window_unknown"
 
 
 class Mt5WorkerConfig(Mt5Model):
     terminal_path: Path | None = None
     broker_symbol: str | None = None
     expected_account_fingerprint: str | None = None
+    smoke_confirmed_specification_fingerprint: SpecificationFingerprint | None = None
     max_tick_age_seconds: Annotated[int, Field(ge=1, le=300)] = 10
     max_clock_drift_seconds: Annotated[int, Field(ge=1, le=300)] = 30
     candle_limit: Annotated[int, Field(ge=1, le=2_000)] = 500
     history_window_hours: Annotated[int, Field(ge=1, le=168)] = 24
-    poll_interval_seconds: Annotated[
-        Decimal, Field(ge=Decimal("1"), le=Decimal("300"))
-    ] = Decimal("5")
+    tick_poll_seconds: Annotated[Decimal, Field(ge=Decimal("1"), le=Decimal("30"))] = (
+        Decimal("5")
+    )
+    position_poll_seconds: Annotated[
+        Decimal, Field(ge=Decimal("5"), le=Decimal("300"))
+    ] = Decimal("15")
+    full_reconciliation_seconds: Annotated[
+        Decimal, Field(ge=Decimal("60"), le=Decimal("3600"))
+    ] = Decimal("600")
     reconnect_max_seconds: Annotated[
         Decimal, Field(ge=Decimal("1"), le=Decimal("300"))
     ] = Decimal("60")
@@ -184,6 +217,10 @@ class Mt5WorkerConfig(Mt5Model):
                 "AURUM_MT5_EXPECTED_ACCOUNT_FINGERPRINT"
             )
             or None,
+            smoke_confirmed_specification_fingerprint=values.get(
+                "AURUM_MT5_SMOKE_CONFIRMED_SPECIFICATION_FINGERPRINT"
+            )
+            or None,
             max_tick_age_seconds=int(
                 values.get("AURUM_MT5_MAX_TICK_AGE_SECONDS", "10")
             ),
@@ -194,8 +231,12 @@ class Mt5WorkerConfig(Mt5Model):
             history_window_hours=int(
                 values.get("AURUM_MT5_HISTORY_WINDOW_HOURS", "24")
             ),
-            poll_interval_seconds=Decimal(
-                values.get("AURUM_MT5_POLL_INTERVAL_SECONDS", "5")
+            tick_poll_seconds=Decimal(values.get("AURUM_MT5_TICK_POLL_SECONDS") or "5"),
+            position_poll_seconds=Decimal(
+                values.get("AURUM_MT5_POSITION_POLL_SECONDS") or "15"
+            ),
+            full_reconciliation_seconds=Decimal(
+                values.get("AURUM_MT5_FULL_RECONCILIATION_SECONDS") or "600"
             ),
             reconnect_max_seconds=Decimal(
                 values.get("AURUM_MT5_RECONNECT_MAX_SECONDS", "60")
@@ -236,8 +277,8 @@ class BrokerSymbolCandidate(ObservationModel):
     broker_symbol: SafeIdentifier
     symbol_path: str
     description: str
-    base_currency: str | None = None
-    profit_currency: str | None = None
+    base_currency: Literal["XAU"]
+    profit_currency: Literal["USD"]
     exact_name: bool
     visible: bool
 
@@ -247,8 +288,8 @@ class BrokerSymbolObservation(ObservationModel):
     broker_symbol: SafeIdentifier
     symbol_path: str
     description: str
-    base_currency: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
-    profit_currency: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+    base_currency: Literal["XAU"]
+    profit_currency: Literal["USD"]
     margin_currency: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
     digits: int = Field(ge=0)
     point: PositiveDecimal
@@ -432,11 +473,90 @@ class HistoryRequest(Mt5Model):
 
     @model_validator(mode="after")
     def validate_window(self) -> Self:
-        if self.end_at < self.start_at:
-            raise ValueError("history end must not precede start")
+        if self.end_at <= self.start_at:
+            raise ValueError("history start must precede end")
         if (self.end_at - self.start_at).total_seconds() > 7 * 24 * 60 * 60:
             raise ValueError("history window exceeds seven days")
         return self
+
+
+class HistoryQueryEvidence(Mt5Model):
+    history_kind: Literal["orders", "deals"]
+    requested_start_at: AwareDatetime
+    requested_end_at: AwareDatetime
+    query_completed_at: AwareDatetime | None = None
+    returned_count: int = Field(ge=0)
+    earliest_returned_at: AwareDatetime | None = None
+    latest_returned_at: AwareDatetime | None = None
+    result_state: HistoryQueryResultState
+    reason_code: Mt5ReasonCode
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> Self:
+        if self.requested_end_at <= self.requested_start_at:
+            raise ValueError("history evidence start must precede end")
+        if (
+            self.query_completed_at is not None
+            and self.query_completed_at < self.requested_end_at
+        ):
+            raise ValueError("history evidence completion must not precede request end")
+        if (self.earliest_returned_at is None) is not (self.latest_returned_at is None):
+            raise ValueError("history evidence boundaries must be paired")
+        if (
+            self.earliest_returned_at is not None
+            and self.latest_returned_at is not None
+            and self.latest_returned_at < self.earliest_returned_at
+        ):
+            raise ValueError("history evidence boundaries are inconsistent")
+
+        successful = self.result_state in {
+            HistoryQueryResultState.QUERY_SUCCEEDED,
+            HistoryQueryResultState.EMPTY_VALID_RESULT,
+        }
+        if successful and self.query_completed_at is None:
+            raise ValueError("successful history evidence requires completion time")
+        if self.result_state is HistoryQueryResultState.QUERY_SUCCEEDED:
+            if self.reason_code is not Mt5ReasonCode.HEALTHY:
+                raise ValueError("non-empty history evidence requires healthy reason")
+            if self.returned_count == 0 or self.earliest_returned_at is None:
+                raise ValueError("non-empty history evidence requires row boundaries")
+        elif self.result_state is HistoryQueryResultState.EMPTY_VALID_RESULT:
+            if self.reason_code is not Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT:
+                raise ValueError("empty history evidence requires empty-result reason")
+            if self.returned_count != 0 or self.earliest_returned_at is not None:
+                raise ValueError("empty history evidence cannot contain row boundaries")
+        elif self.result_state is HistoryQueryResultState.QUERY_FAILED:
+            if self.query_completed_at is None:
+                raise ValueError("failed history evidence requires completion time")
+            if self.returned_count != 0 or self.earliest_returned_at is not None:
+                raise ValueError("failed history evidence cannot claim returned rows")
+            if self.reason_code is not Mt5ReasonCode.HISTORY_QUERY_FAILED:
+                raise ValueError("failed history evidence requires failure reason")
+        elif self.result_state is HistoryQueryResultState.WINDOW_UNKNOWN:
+            if self.query_completed_at is not None:
+                raise ValueError("unknown history evidence cannot claim completion")
+            if self.returned_count != 0 or self.earliest_returned_at is not None:
+                raise ValueError("unknown history evidence cannot claim returned rows")
+            if self.reason_code is not Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE:
+                raise ValueError("unknown history evidence requires incomplete reason")
+        elif (
+            self.result_state is HistoryQueryResultState.WINDOW_INCOMPLETE
+            and self.reason_code is not Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+        ):
+            raise ValueError("incomplete history evidence requires incomplete reason")
+        return self
+
+
+class ConfirmedSymbolBinding(Mt5Model):
+    owner_id: UuidIdentifier
+    trading_account_id: UuidIdentifier
+    canonical_symbol: Literal["XAUUSD"]
+    broker_symbol: SafeIdentifier
+    confirmed_specification_fingerprint: SpecificationFingerprint
+    confirmation_status: Literal["confirmed"]
+    confirmed_at: AwareDatetime
+    confirmed_by: UuidIdentifier
+    version: int = Field(ge=1)
 
 
 class ReconciliationMismatch(Mt5Model):
@@ -455,12 +575,51 @@ class ReconciliationReport(ObservationModel):
     reason_code: Mt5ReasonCode
     account_fingerprint: str | None = None
     server_fingerprint: str | None = None
+    broker_symbol: SafeIdentifier | None = None
     symbol_specification_fingerprint: str | None = None
     open_position_count: int = Field(ge=0)
     active_order_count: int = Field(ge=0)
     order_history_count: int = Field(ge=0)
     deal_history_count: int = Field(ge=0)
+    order_history_evidence: HistoryQueryEvidence
+    deal_history_evidence: HistoryQueryEvidence
     mismatches: tuple[ReconciliationMismatch, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_history_evidence(self) -> Self:
+        if self.order_history_evidence.history_kind != "orders":
+            raise ValueError("order history evidence kind must be orders")
+        if self.deal_history_evidence.history_kind != "deals":
+            raise ValueError("deal history evidence kind must be deals")
+        if self.order_history_count != self.order_history_evidence.returned_count:
+            raise ValueError("order history count must match current evidence")
+        if self.deal_history_count != self.deal_history_evidence.returned_count:
+            raise ValueError("deal history count must match current evidence")
+        if self.outcome is ReconciliationOutcome.MATCHED:
+            if self.reason_code is not Mt5ReasonCode.HEALTHY:
+                raise ValueError("matched reconciliation requires healthy reason")
+            if any(
+                value is None
+                for value in (
+                    self.account_fingerprint,
+                    self.server_fingerprint,
+                    self.broker_symbol,
+                    self.symbol_specification_fingerprint,
+                )
+            ):
+                raise ValueError("matched reconciliation requires complete identity")
+            successful_states = {
+                HistoryQueryResultState.QUERY_SUCCEEDED,
+                HistoryQueryResultState.EMPTY_VALID_RESULT,
+            }
+            if (
+                self.order_history_evidence.result_state not in successful_states
+                or self.deal_history_evidence.result_state not in successful_states
+            ):
+                raise ValueError("matched reconciliation requires successful history")
+            if self.mismatches:
+                raise ValueError("matched reconciliation cannot contain mismatches")
+        return self
 
 
 class Mt5HealthSnapshot(ObservationModel):
@@ -490,6 +649,8 @@ class ReadOnlyPollingState(Mt5Model):
     next_reconnect_seconds: NonNegativeDecimal
     last_successful_observation_at: AwareDatetime | None = None
     reconciliation_required: bool
+    health_state: HealthState | None = None
+    reason_code: Mt5ReasonCode | None = None
     stopped_at: AwareDatetime | None = None
 
 
@@ -499,9 +660,7 @@ class DatabaseReconciliationState(Mt5Model):
     executing_command_ids: frozenset[SafeIdentifier] = frozenset()
     account_fingerprint: str | None = None
     server_fingerprint: str | None = None
-    broker_symbol: str | None = None
-    symbol_specification_fingerprint: str | None = None
-    history_window_complete: bool = True
+    confirmed_symbol_binding: ConfirmedSymbolBinding | None = None
 
 
 class SafeMt5Error(Mt5Model):

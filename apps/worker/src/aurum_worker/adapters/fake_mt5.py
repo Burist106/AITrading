@@ -24,6 +24,7 @@ from aurum_worker.models.mt5 import (
     TerminalObservation,
     Timeframe,
 )
+from aurum_worker.mt5_safety import is_canonical_xauusd
 
 
 @dataclass(slots=True)
@@ -70,6 +71,14 @@ class FakeMt5ReadAdapter(Mt5ReadPort):
     def connect(self, *, trace_id: str) -> TerminalObservation:
         self._record("connect")
         with self._lock:
+            if not self.terminal.connected:
+                raise Mt5ReadFailure(
+                    SafeMt5Error(
+                        reason_code=Mt5ReasonCode.TERMINAL_DISCONNECTED,
+                        safe_detail="Fake terminal reported a disconnected state.",
+                        retryable=True,
+                    )
+                )
             self.connected = True
             if (
                 self._account_index + 1 < len(self.accounts)
@@ -107,7 +116,9 @@ class FakeMt5ReadAdapter(Mt5ReadPort):
     def list_symbol_candidates(self, *, trace_id: str) -> list[BrokerSymbolCandidate]:
         self._record("list_symbol_candidates")
         return [
-            item.model_copy(update={"trace_id": trace_id}) for item in self.candidates
+            item.model_copy(update={"trace_id": trace_id})
+            for item in self.candidates
+            if is_canonical_xauusd("XAUUSD", item.base_currency, item.profit_currency)
         ]
 
     def get_symbol_specification(
@@ -123,6 +134,17 @@ class FakeMt5ReadAdapter(Mt5ReadPort):
                     safe_detail="Configured broker symbol was not found.",
                 )
             ) from error
+        if not is_canonical_xauusd(
+            specification.canonical_symbol,
+            specification.base_currency,
+            specification.profit_currency,
+        ):
+            raise Mt5ReadFailure(
+                SafeMt5Error(
+                    reason_code=Mt5ReasonCode.SYMBOL_CANONICAL_MISMATCH,
+                    safe_detail="Configured fake symbol is not canonical XAU/USD.",
+                )
+            )
         return specification.model_copy(update={"trace_id": trace_id})
 
     def get_latest_tick(
