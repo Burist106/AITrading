@@ -5,6 +5,8 @@ import {
 import type { ScenarioPresentation } from "@aurum/fixtures";
 
 const OBSERVED_AT = "2026-08-28T00:00:00.000Z";
+const HISTORY_START_AT = "2026-08-27T00:00:00.000Z";
+const HISTORY_COMPLETED_AT = "2026-08-28T00:00:01.000Z";
 
 export function buildMt5ConsoleFixture(
   scenario: ScenarioPresentation,
@@ -20,11 +22,13 @@ export function buildMt5ConsoleFixture(
     : stale
       ? "TICK_STALE"
       : pending
-        ? "RECONNECTING"
+        ? "TERMINAL_DISCONNECTED"
         : connected
           ? "HEALTHY"
           : "TERMINAL_DISCONNECTED";
   const outcome = blocked ? "incomplete" : pending ? null : "matched";
+  const reconciliationReasonCode =
+    outcome === "matched" ? "HEALTHY" : reasonCode;
 
   return Mt5ConsoleReadModelSchema.parse({
     account: {
@@ -50,6 +54,8 @@ export function buildMt5ConsoleFixture(
       schemaVersion: "1",
       canonicalSymbol: "XAUUSD",
       brokerSymbol: "XAUUSD",
+      currencyBase: "XAU",
+      currencyProfit: "USD",
       specificationFingerprint: "mt5-spec-v1:fixture",
       usabilityState: "usable",
       unusableReason: null,
@@ -82,7 +88,7 @@ export function buildMt5ConsoleFixture(
       traceId: "fixture-mt5",
       status: pending ? "running" : "completed",
       outcome,
-      reasonCode,
+      reasonCode: reconciliationReasonCode,
       startedAt: OBSERVED_AT,
       completedAt: pending ? null : OBSERVED_AT,
       openPositionCount: scenario.positionState.startsWith("open") ? 1 : 0,
@@ -99,6 +105,23 @@ export function buildMt5ConsoleFixture(
             },
           ]
         : [],
+      historyEvidence: pending
+        ? []
+        : (["orders", "deals"] as const).map((historyKind) => ({
+            historyKind,
+            requestedStartAt: HISTORY_START_AT,
+            requestedEndAt: OBSERVED_AT,
+            queryCompletedAt: blocked ? null : HISTORY_COMPLETED_AT,
+            returnedCount: 0,
+            earliestReturnedAt: null,
+            latestReturnedAt: null,
+            resultState: blocked
+              ? ("window_unknown" as const)
+              : ("empty_valid_result" as const),
+            reasonCode: blocked
+              ? "HISTORY_WINDOW_INCOMPLETE"
+              : "HISTORY_EMPTY_VALID_RESULT",
+          })),
     },
     health: {
       observedAt: OBSERVED_AT,

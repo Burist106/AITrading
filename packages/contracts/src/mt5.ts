@@ -15,6 +15,9 @@ export const PositiveDecimalStringSchema =
     "Expected a positive decimal string",
   );
 export const TicketIdentifierSchema = z.string().regex(/^[0-9]{1,32}$/u);
+export const Mt5SpecificationFingerprintSchema = z
+  .string()
+  .regex(/^mt5-spec-v1:[A-Za-z0-9:_-]{4,128}$/u);
 
 export const MT5_ACCOUNT_VERIFICATION_STATES = [
   "verified_demo_bound",
@@ -63,7 +66,9 @@ export const MT5_RECONCILIATION_CATEGORIES = [
   "EXECUTION_RESULT_UNCERTAIN",
   "ACCOUNT_CHANGED",
   "SERVER_CHANGED",
+  "SYMBOL_SPEC_CONFIRMATION_REQUIRED",
   "SYMBOL_SPEC_CHANGED",
+  "HISTORY_QUERY_FAILED",
   "HISTORY_WINDOW_INCOMPLETE",
   "CLOCK_INCONSISTENCY",
 ] as const;
@@ -91,7 +96,9 @@ export const Mt5AccountReadModelSchema = ObservationMetadataSchema.extend({
 export const Mt5SymbolReadModelSchema = ObservationMetadataSchema.extend({
   canonicalSymbol: z.literal("XAUUSD"),
   brokerSymbol: IdentifierSchema,
-  specificationFingerprint: z.string().startsWith("mt5-spec-v1:"),
+  currencyBase: z.literal("XAU"),
+  currencyProfit: z.literal("USD"),
+  specificationFingerprint: Mt5SpecificationFingerprintSchema,
   usabilityState: z.enum(["usable", "not_visible", "incomplete", "invalid"]),
   unusableReason: IdentifierSchema.nullable(),
   point: PositiveDecimalStringSchema,
@@ -121,19 +128,213 @@ export const Mt5ReconciliationMismatchSchema = z.strictObject({
   reasonCode: IdentifierSchema.nullable(),
 });
 
-export const Mt5ReconciliationReadModelSchema = z.strictObject({
-  id: UuidSchema,
-  traceId: IdentifierSchema,
-  status: z.enum(["running", "completed"]),
-  outcome: Mt5ReconciliationOutcomeSchema.nullable(),
-  reasonCode: IdentifierSchema,
-  startedAt: IsoDateTimeSchema,
-  completedAt: IsoDateTimeSchema.nullable(),
-  openPositionCount: z.number().int().nonnegative(),
-  activeOrderCount: z.number().int().nonnegative(),
-  mismatchCount: z.number().int().nonnegative(),
-  mismatches: z.array(Mt5ReconciliationMismatchSchema),
-});
+export const MT5_HISTORY_QUERY_KINDS = ["orders", "deals"] as const;
+export const Mt5HistoryQueryKindSchema = z.enum(MT5_HISTORY_QUERY_KINDS);
+
+export const MT5_HISTORY_QUERY_RESULT_STATES = [
+  "query_succeeded",
+  "empty_valid_result",
+  "query_failed",
+  "window_incomplete",
+  "window_unknown",
+] as const;
+export const Mt5HistoryQueryResultStateSchema = z.enum(
+  MT5_HISTORY_QUERY_RESULT_STATES,
+);
+
+export const Mt5HistoryQueryEvidenceSchema = z
+  .strictObject({
+    historyKind: Mt5HistoryQueryKindSchema,
+    requestedStartAt: IsoDateTimeSchema,
+    requestedEndAt: IsoDateTimeSchema,
+    queryCompletedAt: IsoDateTimeSchema.nullable(),
+    returnedCount: z.number().int().nonnegative(),
+    earliestReturnedAt: IsoDateTimeSchema.nullable(),
+    latestReturnedAt: IsoDateTimeSchema.nullable(),
+    resultState: Mt5HistoryQueryResultStateSchema,
+    reasonCode: IdentifierSchema,
+  })
+  .superRefine((value, context) => {
+    const issue = (message: string): void => {
+      context.addIssue({ code: "custom", message });
+    };
+    if (
+      Date.parse(value.requestedEndAt) <= Date.parse(value.requestedStartAt)
+    ) {
+      issue("History evidence end must be after start.");
+    }
+    if (
+      value.queryCompletedAt !== null &&
+      Date.parse(value.queryCompletedAt) < Date.parse(value.requestedEndAt)
+    ) {
+      issue("History evidence completion must not precede the requested end.");
+    }
+    const hasEarliest = value.earliestReturnedAt !== null;
+    const hasLatest = value.latestReturnedAt !== null;
+    if (hasEarliest !== hasLatest) {
+      issue("History evidence boundaries must be paired.");
+    } else if (
+      value.earliestReturnedAt !== null &&
+      value.latestReturnedAt !== null &&
+      Date.parse(value.latestReturnedAt) < Date.parse(value.earliestReturnedAt)
+    ) {
+      issue("History evidence boundaries are inconsistent.");
+    }
+
+    if (
+      (value.resultState === "query_succeeded" ||
+        value.resultState === "empty_valid_result") &&
+      value.queryCompletedAt === null
+    ) {
+      issue("Successful history evidence requires a completion time.");
+    }
+    if (
+      value.resultState === "query_succeeded" &&
+      (value.returnedCount === 0 ||
+        !hasEarliest ||
+        value.reasonCode !== "HEALTHY")
+    ) {
+      issue(
+        "Non-empty history evidence requires row boundaries and a healthy reason.",
+      );
+    }
+    if (
+      value.resultState === "empty_valid_result" &&
+      (value.returnedCount !== 0 ||
+        hasEarliest ||
+        value.reasonCode !== "HISTORY_EMPTY_VALID_RESULT")
+    ) {
+      issue(
+        "Empty history evidence requires an explicit valid-empty reason and no returned rows.",
+      );
+    }
+    if (
+      value.resultState === "query_failed" &&
+      (value.queryCompletedAt === null ||
+        value.returnedCount !== 0 ||
+        hasEarliest ||
+        value.reasonCode !== "HISTORY_QUERY_FAILED")
+    ) {
+      issue(
+        "Failed history evidence must carry only bounded failure evidence.",
+      );
+    }
+    if (
+      value.resultState === "window_unknown" &&
+      (value.queryCompletedAt !== null ||
+        value.returnedCount !== 0 ||
+        hasEarliest ||
+        value.reasonCode !== "HISTORY_WINDOW_INCOMPLETE")
+    ) {
+      issue(
+        "Unknown history evidence cannot claim completion or returned rows.",
+      );
+    }
+    if (
+      value.resultState === "window_incomplete" &&
+      value.reasonCode !== "HISTORY_WINDOW_INCOMPLETE"
+    ) {
+      issue("Incomplete history evidence requires an incomplete reason.");
+    }
+  });
+
+export const Mt5ReconciliationReadModelSchema = z
+  .strictObject({
+    id: UuidSchema,
+    traceId: IdentifierSchema,
+    status: z.enum(["running", "completed"]),
+    outcome: Mt5ReconciliationOutcomeSchema.nullable(),
+    reasonCode: IdentifierSchema,
+    startedAt: IsoDateTimeSchema,
+    completedAt: IsoDateTimeSchema.nullable(),
+    openPositionCount: z.number().int().nonnegative(),
+    activeOrderCount: z.number().int().nonnegative(),
+    mismatchCount: z.number().int().nonnegative(),
+    mismatches: z.array(Mt5ReconciliationMismatchSchema),
+    historyEvidence: z.array(Mt5HistoryQueryEvidenceSchema).max(2),
+  })
+  .superRefine((value, context) => {
+    if (value.status === "running") {
+      if (
+        value.outcome !== null ||
+        value.completedAt !== null ||
+        value.historyEvidence.length !== 0
+      ) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "A running reconciliation cannot claim an outcome, completion time, or history evidence.",
+        });
+      }
+      return;
+    }
+
+    if (value.outcome === null || value.completedAt === null) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "A completed reconciliation requires an outcome and completion time.",
+      });
+    } else if (Date.parse(value.completedAt) < Date.parse(value.startedAt)) {
+      context.addIssue({
+        code: "custom",
+        path: ["completedAt"],
+        message: "Reconciliation completion cannot precede its start.",
+      });
+    }
+
+    const kinds = new Set(
+      value.historyEvidence.map(({ historyKind }) => historyKind),
+    );
+    if (
+      value.historyEvidence.length !== 2 ||
+      kinds.size !== 2 ||
+      !kinds.has("orders") ||
+      !kinds.has("deals")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["historyEvidence"],
+        message:
+          "A completed reconciliation requires one orders and one deals evidence record.",
+      });
+    }
+    if (value.mismatchCount !== value.mismatches.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["mismatchCount"],
+        message:
+          "Completed reconciliation mismatch count must match its evidence.",
+      });
+    }
+    if (
+      value.outcome === "matched" &&
+      value.historyEvidence.some(
+        ({ resultState }) =>
+          resultState !== "query_succeeded" &&
+          resultState !== "empty_valid_result",
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["historyEvidence"],
+        message:
+          "A matched reconciliation requires successful current-run history evidence.",
+      });
+    }
+    if (
+      value.outcome === "matched" &&
+      (value.reasonCode !== "HEALTHY" ||
+        value.mismatchCount !== 0 ||
+        value.mismatches.length !== 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "A matched reconciliation requires a healthy reason and no mismatches.",
+      });
+    }
+  });
 
 export const Mt5HealthReadModelSchema = ObservationMetadataSchema.extend({
   state: Mt5HealthStateSchema,
@@ -146,7 +347,7 @@ export const Mt5HealthReadModelSchema = ObservationMetadataSchema.extend({
   maskedAccount: z.string().nullable(),
   maskedServer: z.string().nullable(),
   brokerSymbol: IdentifierSchema.nullable(),
-  specificationFingerprint: z.string().nullable(),
+  specificationFingerprint: Mt5SpecificationFingerprintSchema.nullable(),
   tickAgeSeconds: NonNegativeDecimalStringSchema.nullable(),
   lastCompletedCandleAt: IsoDateTimeSchema.nullable(),
   lastSuccessfulObservationAt: IsoDateTimeSchema.nullable(),
@@ -171,6 +372,9 @@ export type Mt5LatestTickReadModel = z.infer<
 >;
 export type Mt5ReconciliationMismatch = z.infer<
   typeof Mt5ReconciliationMismatchSchema
+>;
+export type Mt5HistoryQueryEvidence = z.infer<
+  typeof Mt5HistoryQueryEvidenceSchema
 >;
 export type Mt5ReconciliationReadModel = z.infer<
   typeof Mt5ReconciliationReadModelSchema

@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   DecimalStringSchema,
   Mt5AccountReadModelSchema,
+  Mt5HistoryQueryEvidenceSchema,
   Mt5LatestTickReadModelSchema,
+  Mt5ReconciliationReadModelSchema,
+  Mt5SymbolReadModelSchema,
   PositiveDecimalStringSchema,
   TicketIdentifierSchema,
 } from "../src";
@@ -97,6 +100,338 @@ describe("MT5 decimal-string and sanitized read contracts", () => {
     expect(Mt5LatestTickReadModelSchema.safeParse(tick).success).toBe(true);
     expect(
       Mt5LatestTickReadModelSchema.safeParse({ ...tick, bid: 2345.1 }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a broker alias only when its specification is canonical XAU/USD", () => {
+    const symbol = {
+      observedAt: "2026-08-28T00:00:00Z",
+      source: "fake_mt5",
+      adapterVersion: "fake-v1",
+      traceId: "trace",
+      schemaVersion: "1",
+      canonicalSymbol: "XAUUSD",
+      brokerSymbol: "GOLD",
+      currencyBase: "XAU",
+      currencyProfit: "USD",
+      specificationFingerprint: "mt5-spec-v1:fixture",
+      usabilityState: "usable",
+      unusableReason: null,
+      point: "0.01",
+      tickSize: "0.01",
+      contractSize: "100",
+      minimumVolume: "0.01",
+      maximumVolume: "100",
+      volumeStep: "0.01",
+    };
+
+    expect(Mt5SymbolReadModelSchema.safeParse(symbol).success).toBe(true);
+    expect(
+      Mt5SymbolReadModelSchema.safeParse({
+        ...symbol,
+        currencyBase: "EUR",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5SymbolReadModelSchema.safeParse({
+        ...symbol,
+        currencyProfit: "JPY",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps bounded history-query evidence explicit", () => {
+    const evidence = {
+      historyKind: "orders",
+      requestedStartAt: "2026-08-27T00:00:00Z",
+      requestedEndAt: "2026-08-28T00:00:00Z",
+      queryCompletedAt: "2026-08-28T00:00:01Z",
+      returnedCount: 0,
+      earliestReturnedAt: null,
+      latestReturnedAt: null,
+      resultState: "empty_valid_result",
+      reasonCode: "HISTORY_EMPTY_VALID_RESULT",
+    };
+
+    expect(Mt5HistoryQueryEvidenceSchema.safeParse(evidence).success).toBe(
+      true,
+    );
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        resultState: "complete",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        resultState: "query_succeeded",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        resultState: "query_failed",
+        reasonCode: "HISTORY_EMPTY_VALID_RESULT",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        reasonCode: "HEALTHY",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a non-empty requested window completed no earlier than its end", () => {
+    const evidence = {
+      historyKind: "orders",
+      requestedStartAt: "2026-08-27T00:00:00Z",
+      requestedEndAt: "2026-08-28T00:00:00Z",
+      queryCompletedAt: "2026-08-28T00:00:01Z",
+      returnedCount: 0,
+      earliestReturnedAt: null,
+      latestReturnedAt: null,
+      resultState: "empty_valid_result",
+      reasonCode: "HISTORY_EMPTY_VALID_RESULT",
+    };
+
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        requestedStartAt: evidence.requestedEndAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        requestedStartAt: "2026-08-29T00:00:00Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...evidence,
+        queryCompletedAt: "2026-08-27T23:59:59Z",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("enforces history result-state reasons and nullability", () => {
+    const base = {
+      historyKind: "orders",
+      requestedStartAt: "2026-08-27T00:00:00Z",
+      requestedEndAt: "2026-08-28T00:00:00Z",
+      queryCompletedAt: "2026-08-28T00:00:01Z",
+      returnedCount: 0,
+      earliestReturnedAt: null,
+      latestReturnedAt: null,
+      resultState: "empty_valid_result",
+      reasonCode: "HISTORY_EMPTY_VALID_RESULT",
+    };
+
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "query_succeeded",
+        returnedCount: 1,
+        earliestReturnedAt: "2026-08-27T12:00:00Z",
+        latestReturnedAt: "2026-08-27T12:00:00Z",
+        reasonCode: "HEALTHY",
+      }).success,
+    ).toBe(true);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "query_succeeded",
+        returnedCount: 1,
+        earliestReturnedAt: "2026-08-27T12:00:00Z",
+        latestReturnedAt: "2026-08-27T12:00:00Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "query_failed",
+        reasonCode: "HISTORY_QUERY_FAILED",
+      }).success,
+    ).toBe(true);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "query_failed",
+        queryCompletedAt: null,
+        reasonCode: "HISTORY_QUERY_FAILED",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "window_unknown",
+        queryCompletedAt: null,
+        reasonCode: "HISTORY_WINDOW_INCOMPLETE",
+      }).success,
+    ).toBe(true);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "window_unknown",
+        reasonCode: "HISTORY_WINDOW_INCOMPLETE",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "window_incomplete",
+        reasonCode: "HISTORY_WINDOW_INCOMPLETE",
+      }).success,
+    ).toBe(true);
+    expect(
+      Mt5HistoryQueryEvidenceSchema.safeParse({
+        ...base,
+        resultState: "window_incomplete",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires exactly one orders and one deals evidence row when completed", () => {
+    const orderEvidence = {
+      historyKind: "orders",
+      requestedStartAt: "2026-08-27T00:00:00Z",
+      requestedEndAt: "2026-08-28T00:00:00Z",
+      queryCompletedAt: "2026-08-28T00:00:01Z",
+      returnedCount: 0,
+      earliestReturnedAt: null,
+      latestReturnedAt: null,
+      resultState: "empty_valid_result",
+      reasonCode: "HISTORY_EMPTY_VALID_RESULT",
+    };
+    const reconciliation = {
+      id: "00000000-0000-4000-8000-000000000054",
+      traceId: "trace-mt5",
+      status: "completed",
+      outcome: "matched",
+      reasonCode: "HEALTHY",
+      startedAt: "2026-08-28T00:00:00Z",
+      completedAt: "2026-08-28T00:00:02Z",
+      openPositionCount: 0,
+      activeOrderCount: 0,
+      mismatchCount: 0,
+      mismatches: [],
+      historyEvidence: [
+        orderEvidence,
+        { ...orderEvidence, historyKind: "deals" },
+      ],
+    };
+
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse(reconciliation).success,
+    ).toBe(true);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        historyEvidence: [orderEvidence],
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        historyEvidence: [orderEvidence, { ...orderEvidence }],
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        outcome: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        completedAt: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        completedAt: "2026-08-27T23:59:59Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        historyEvidence: [
+          orderEvidence,
+          {
+            ...orderEvidence,
+            historyKind: "deals",
+            resultState: "query_failed",
+            reasonCode: "HISTORY_QUERY_FAILED",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        reasonCode: "RECONCILIATION_INCOMPLETE",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...reconciliation,
+        mismatchCount: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps a running reconciliation free of completion claims", () => {
+    const running = {
+      id: "00000000-0000-4000-8000-000000000054",
+      traceId: "trace-mt5",
+      status: "running",
+      outcome: null,
+      reasonCode: "RECONCILIATION_INCOMPLETE",
+      startedAt: "2026-08-28T00:00:00Z",
+      completedAt: null,
+      openPositionCount: 0,
+      activeOrderCount: 0,
+      mismatchCount: 0,
+      mismatches: [],
+      historyEvidence: [],
+    };
+
+    expect(Mt5ReconciliationReadModelSchema.safeParse(running).success).toBe(
+      true,
+    );
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...running,
+        outcome: "matched",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...running,
+        completedAt: "2026-08-28T00:00:01Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      Mt5ReconciliationReadModelSchema.safeParse({
+        ...running,
+        historyEvidence: [
+          {
+            historyKind: "orders",
+            requestedStartAt: "2026-08-27T00:00:00Z",
+            requestedEndAt: "2026-08-28T00:00:00Z",
+            queryCompletedAt: "2026-08-28T00:00:01Z",
+            returnedCount: 0,
+            earliestReturnedAt: null,
+            latestReturnedAt: null,
+            resultState: "empty_valid_result",
+            reasonCode: "HISTORY_EMPTY_VALID_RESULT",
+          },
+        ],
+      }).success,
     ).toBe(false);
   });
 });

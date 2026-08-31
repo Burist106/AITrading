@@ -67,6 +67,7 @@ describe("MT5 read-only Console states", () => {
             status: "running",
             outcome: null,
             completedAt: null,
+            historyEvidence: [],
           },
         }),
       ),

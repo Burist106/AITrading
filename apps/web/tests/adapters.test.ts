@@ -18,6 +18,7 @@ import type {
   SystemHeartbeatReadRow,
   TradeProposalReadRow,
 } from "../lib/control-plane-read-models";
+import { mt5ConsoleFromReadRows } from "../lib/mt5-read-models";
 
 const OWNER_ID = "00000000-0000-4000-8000-000000000001";
 const OTHER_OWNER_ID = "00000000-0000-4000-8000-000000000002";
@@ -26,6 +27,7 @@ const POSITION_ID = "00000000-0000-4000-8000-000000000020";
 const COMMAND_ID = "00000000-0000-4000-8000-000000000030";
 const COMPONENT_ID = "00000000-0000-4000-8000-000000000040";
 const NOW = "2026-08-26T12:00:00.000Z";
+const HISTORY_START = "2026-08-25T12:00:00.000Z";
 
 const proposalRow: TradeProposalReadRow = {
   id: PROPOSAL_ID,
@@ -232,6 +234,8 @@ describe("owner-scoped control-plane reads", () => {
       broker_symbol: "XAUUSD",
       specification_fingerprint: "mt5-spec-v1:fixture",
       normalized_specification: {
+        base_currency: "XAU",
+        profit_currency: "USD",
         point: "0.01",
         tick_size: "0.01",
         contract_size: "100",
@@ -293,23 +297,230 @@ describe("owner-scoped control-plane reads", () => {
       created_at: NOW,
       updated_at: NOW,
     };
-    const gateway = new RecordingReadGateway({
-      mt5_account_observations: success(account),
-      mt5_symbol_observations: success(symbol),
-      mt5_latest_tick_observations: success(tick),
-      mt5_reconciliation_runs: success(reconciliation),
-    });
-    const adapter = new OwnerScopedControlPlaneReadAdapter(OWNER_ID, gateway);
+    const historyEvidence: ControlPlaneReadRowMap["mt5_history_query_evidence"][] =
+      (["orders", "deals"] as const).map((historyKind, index) => ({
+        id: `00000000-0000-4000-8000-00000000005${5 + index}`,
+        owner_id: OWNER_ID,
+        reconciliation_id: reconciliation.id,
+        history_kind: historyKind,
+        requested_start_at: HISTORY_START,
+        requested_end_at: NOW,
+        query_completed_at: NOW,
+        returned_count: 0,
+        earliest_returned_at: null,
+        latest_returned_at: null,
+        result_state: "empty_valid_result",
+        reason_code: "HISTORY_EMPTY_VALID_RESULT",
+        created_at: NOW,
+      }));
+    const gateway = new RecordingReadGateway(
+      {
+        mt5_account_observations: success(account),
+        mt5_symbol_observations: success(symbol),
+        mt5_latest_tick_observations: success(tick),
+        mt5_reconciliation_runs: success(reconciliation),
+      },
+      { mt5_history_query_evidence: success(historyEvidence) },
+    );
+    const adapter = new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      gateway,
+      () => new Date(NOW),
+    );
 
     const model = await adapter.getMt5Console();
 
     expect(model.health.state).toBe("healthy");
     expect(model.account?.maskedLogin).toBe("••••3456");
+    expect(model.symbol).toMatchObject({
+      brokerSymbol: "XAUUSD",
+      currencyBase: "XAU",
+      currencyProfit: "USD",
+    });
     expect(model.tick?.bid).toBe("2345.1");
+    expect(model.reconciliation?.historyEvidence).toHaveLength(2);
     expect(model).not.toHaveProperty("worker_id");
     expect(model).not.toHaveProperty("report_hash");
     expectOwnerScope(gateway.queries);
-    expect(gateway.queries).toHaveLength(5);
+    expect(gateway.queries).toHaveLength(6);
+
+    const beforeReconciliation = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      new RecordingReadGateway({
+        mt5_account_observations: success(account),
+        mt5_symbol_observations: success(symbol),
+        mt5_latest_tick_observations: success(tick),
+        mt5_reconciliation_runs: success(null),
+      }),
+      () => new Date(NOW),
+    ).getMt5Console();
+    expect(beforeReconciliation.health).toMatchObject({
+      state: "blocked",
+      reasonCode: "RECONCILIATION_REQUIRED",
+    });
+
+    const staleObservation = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      gateway,
+      () => new Date(Date.parse(NOW) + 61_000),
+    ).getMt5Console();
+    expect(staleObservation.health).toMatchObject({
+      state: "unavailable",
+      reasonCode: "MT5_OBSERVATION_STALE",
+      packageAvailable: false,
+      terminalConnected: false,
+      lastSuccessfulObservationAt: null,
+    });
+
+    for (const [freshness, reasonCode] of [
+      ["delayed", "TICK_DELAYED"],
+      ["unavailable", "TICK_UNAVAILABLE"],
+    ] as const) {
+      expect(
+        mt5ConsoleFromReadRows(
+          {
+            account,
+            symbol,
+            tick: { ...tick, freshness },
+            reconciliation,
+            mismatches: [],
+            historyEvidence,
+          },
+          new Date(NOW),
+        ).health,
+      ).toMatchObject({ state: "blocked", reasonCode });
+    }
+
+    expect(
+      mt5ConsoleFromReadRows(
+        {
+          account,
+          symbol: null,
+          tick,
+          reconciliation,
+          mismatches: [],
+          historyEvidence,
+        },
+        new Date(NOW),
+      ).health,
+    ).toMatchObject({
+      state: "blocked",
+      reasonCode: "SYMBOL_OBSERVATION_UNAVAILABLE",
+    });
+    expect(
+      mt5ConsoleFromReadRows(
+        {
+          account,
+          symbol: {
+            ...symbol,
+            usability_state: "not_visible",
+            unusable_reason: "SYMBOL_NOT_VISIBLE",
+          },
+          tick,
+          reconciliation,
+          mismatches: [],
+          historyEvidence,
+        },
+        new Date(NOW),
+      ).health,
+    ).toMatchObject({ state: "blocked", reasonCode: "SYMBOL_NOT_VISIBLE" });
+
+    for (const inconsistentRows of [
+      { symbol: { ...symbol, account_fingerprint: "mt5-account-v1:changed" } },
+      { tick: { ...tick, account_fingerprint: "mt5-account-v1:changed" } },
+      {
+        symbol: {
+          ...symbol,
+          specification_fingerprint: "mt5-spec-v1:changed",
+        },
+      },
+      {
+        reconciliation: {
+          ...reconciliation,
+          server_fingerprint: "mt5-server-v1:changed",
+        },
+      },
+    ]) {
+      expect(
+        mt5ConsoleFromReadRows(
+          {
+            account,
+            symbol,
+            tick,
+            reconciliation,
+            mismatches: [],
+            historyEvidence,
+            ...inconsistentRows,
+          },
+          new Date(NOW),
+        ).health,
+      ).toMatchObject({
+        state: "blocked",
+        reasonCode: "RECONCILIATION_OBSERVATION_MISMATCH",
+      });
+    }
+
+    const mismatch: ControlPlaneReadRowMap["mt5_reconciliation_mismatches"] = {
+      id: "00000000-0000-4000-8000-000000000057",
+      owner_id: OWNER_ID,
+      reconciliation_id: reconciliation.id,
+      category: "ACCOUNT_CHANGED",
+      severity: "critical",
+      resource_type: "account",
+      resource_reference: "mt5-account-v1:fixture",
+      reason_code: "ACCOUNT_CHANGED",
+      resolution_state: "open",
+      worker_id: "worker-fixture",
+      created_at: NOW,
+    };
+    const otherReconciliationId = "00000000-0000-4000-8000-000000000058";
+    const baseSingles = {
+      mt5_account_observations: success(account),
+      mt5_symbol_observations: success(symbol),
+      mt5_latest_tick_observations: success(tick),
+      mt5_reconciliation_runs: success(reconciliation),
+    };
+
+    for (const [relation, mismatchRows, evidenceRows] of [
+      [
+        "mt5_reconciliation_mismatches",
+        [{ ...mismatch, owner_id: OTHER_OWNER_ID }],
+        historyEvidence,
+      ],
+      [
+        "mt5_reconciliation_mismatches",
+        [{ ...mismatch, reconciliation_id: otherReconciliationId }],
+        historyEvidence,
+      ],
+      [
+        "mt5_history_query_evidence",
+        [],
+        [{ ...historyEvidence[0]!, owner_id: OTHER_OWNER_ID }],
+      ],
+      [
+        "mt5_history_query_evidence",
+        [],
+        [
+          {
+            ...historyEvidence[0]!,
+            reconciliation_id: otherReconciliationId,
+          },
+        ],
+      ],
+    ] as const) {
+      const invalidChildAdapter = new OwnerScopedControlPlaneReadAdapter(
+        OWNER_ID,
+        new RecordingReadGateway(baseSingles, {
+          mt5_reconciliation_mismatches: success(mismatchRows),
+          mt5_history_query_evidence: success(evidenceRows),
+        }),
+        () => new Date(NOW),
+      );
+      await expect(invalidChildAdapter.getMt5Console()).rejects.toMatchObject({
+        code: "INVALID_READ_DATA",
+        relation,
+      });
+    }
   });
 
   it("maps snake_case proposal and risk evidence without fabricating a full proposal", async () => {

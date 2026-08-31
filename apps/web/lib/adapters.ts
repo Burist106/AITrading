@@ -23,6 +23,7 @@ import {
 import {
   mt5ConsoleFromReadRows,
   type Mt5AccountObservationReadRow,
+  type Mt5HistoryQueryEvidenceReadRow,
   type Mt5LatestTickObservationReadRow,
   type Mt5ReconciliationMismatchReadRow,
   type Mt5ReconciliationRunReadRow,
@@ -39,6 +40,7 @@ export interface ControlPlaneReadRowMap {
   mt5_account_observations: Mt5AccountObservationReadRow;
   mt5_symbol_observations: Mt5SymbolObservationReadRow;
   mt5_latest_tick_observations: Mt5LatestTickObservationReadRow;
+  mt5_history_query_evidence: Mt5HistoryQueryEvidenceReadRow;
   mt5_reconciliation_runs: Mt5ReconciliationRunReadRow;
   mt5_reconciliation_mismatches: Mt5ReconciliationMismatchReadRow;
 }
@@ -242,6 +244,7 @@ const MT5_ACCOUNT_COLUMNS = [
 const MT5_SYMBOL_COLUMNS = [
   "id",
   "owner_id",
+  "account_fingerprint",
   "canonical_symbol",
   "broker_symbol",
   "specification_fingerprint",
@@ -258,6 +261,7 @@ const MT5_SYMBOL_COLUMNS = [
 const MT5_TICK_COLUMNS = [
   "id",
   "owner_id",
+  "account_fingerprint",
   "broker_symbol",
   "bid",
   "ask",
@@ -279,6 +283,10 @@ const MT5_RECONCILIATION_COLUMNS = [
   "status",
   "outcome",
   "reason_code",
+  "account_fingerprint",
+  "server_fingerprint",
+  "broker_symbol",
+  "symbol_specification_fingerprint",
   "open_position_count",
   "active_order_count",
   "mismatch_count",
@@ -298,6 +306,22 @@ const MT5_MISMATCH_COLUMNS = [
   "reason_code",
   "created_at",
 ] as const satisfies readonly (keyof Mt5ReconciliationMismatchReadRow)[];
+
+const MT5_HISTORY_EVIDENCE_COLUMNS = [
+  "id",
+  "owner_id",
+  "reconciliation_id",
+  "history_kind",
+  "requested_start_at",
+  "requested_end_at",
+  "query_completed_at",
+  "returned_count",
+  "earliest_returned_at",
+  "latest_returned_at",
+  "result_state",
+  "reason_code",
+  "created_at",
+] as const satisfies readonly (keyof Mt5HistoryQueryEvidenceReadRow)[];
 
 /** No payload, lease_token, or last_error may enter the browser projection. */
 export const SYSTEM_COMMAND_PROGRESS_COLUMNS = [
@@ -608,22 +632,62 @@ export class OwnerScopedControlPlaneReadAdapter implements ReadOnlyControlPlaneA
               orderBy: { column: "created_at", ascending: true },
             }),
           );
+    const historyEvidence =
+      reconciliation === null
+        ? []
+        : await readFromGateway("mt5_history_query_evidence", () =>
+            this.#gateway.selectMany({
+              relation: "mt5_history_query_evidence",
+              columns: MT5_HISTORY_EVIDENCE_COLUMNS,
+              ownerFilter: { column: "owner_id", value: this.#ownerId },
+              filters: [
+                {
+                  column: "reconciliation_id",
+                  value: reconciliation.id,
+                },
+              ],
+              orderBy: { column: "history_kind", ascending: true },
+            }),
+          );
     for (const mismatch of mismatches) {
       requireOwner(
         "mt5_reconciliation_mismatches",
         this.#ownerId,
         mismatch.owner_id,
       );
+      if (mismatch.reconciliation_id !== reconciliation?.id) {
+        throw new ControlPlaneReadError(
+          "INVALID_READ_DATA",
+          "mt5_reconciliation_mismatches",
+        );
+      }
+    }
+    for (const evidence of historyEvidence) {
+      requireOwner(
+        "mt5_history_query_evidence",
+        this.#ownerId,
+        evidence.owner_id,
+      );
+      if (evidence.reconciliation_id !== reconciliation?.id) {
+        throw new ControlPlaneReadError(
+          "INVALID_READ_DATA",
+          "mt5_history_query_evidence",
+        );
+      }
     }
 
     return mapRead("mt5_account_observations", () =>
-      mt5ConsoleFromReadRows({
-        account,
-        symbol,
-        tick,
-        reconciliation,
-        mismatches,
-      }),
+      mt5ConsoleFromReadRows(
+        {
+          account,
+          symbol,
+          tick,
+          reconciliation,
+          mismatches,
+          historyEvidence,
+        },
+        this.#clock(),
+      ),
     );
   }
 }
@@ -656,6 +720,7 @@ export class UnavailableControlPlaneAdapter implements ReadOnlyControlPlaneAdapt
       tick: null,
       reconciliation: null,
       mismatches: [],
+      historyEvidence: [],
     });
   }
 }

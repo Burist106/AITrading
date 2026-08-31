@@ -14,6 +14,11 @@ export type Mt5ReconciliationRunReadRow =
   Database["public"]["Tables"]["mt5_reconciliation_runs"]["Row"];
 export type Mt5ReconciliationMismatchReadRow =
   Database["public"]["Tables"]["mt5_reconciliation_mismatches"]["Row"];
+export type Mt5HistoryQueryEvidenceReadRow =
+  Database["public"]["Tables"]["mt5_history_query_evidence"]["Row"];
+
+/** Two missed maximum-length tick polls expire the browser's liveness claim. */
+const MT5_OBSERVATION_MAX_AGE_SECONDS = 60;
 
 function decimalString(value: number): string {
   if (!Number.isFinite(value)) throw new TypeError("Invalid database decimal.");
@@ -44,40 +49,120 @@ export interface Mt5ConsoleRows {
   readonly tick: Mt5LatestTickObservationReadRow | null;
   readonly reconciliation: Mt5ReconciliationRunReadRow | null;
   readonly mismatches: readonly Mt5ReconciliationMismatchReadRow[];
+  readonly historyEvidence: readonly Mt5HistoryQueryEvidenceReadRow[];
 }
 
 export function mt5ConsoleFromReadRows(
   rows: Mt5ConsoleRows,
+  currentTime: Date = new Date(),
 ): Mt5ConsoleReadModel {
   const account = rows.account;
   const symbol = rows.symbol;
   const tick = rows.tick;
   const reconciliation = rows.reconciliation;
   const verificationState = account?.verification_state ?? null;
+  const reconciliationMatchesCurrentObservations =
+    account !== null &&
+    symbol !== null &&
+    tick !== null &&
+    reconciliation !== null &&
+    symbol.account_fingerprint === account.account_fingerprint &&
+    tick.account_fingerprint === account.account_fingerprint &&
+    tick.broker_symbol === symbol.broker_symbol &&
+    reconciliation.account_fingerprint === account.account_fingerprint &&
+    reconciliation.server_fingerprint === account.server_fingerprint &&
+    reconciliation.broker_symbol === symbol.broker_symbol &&
+    reconciliation.symbol_specification_fingerprint ===
+      symbol.specification_fingerprint;
+  const historyKinds = new Set(
+    rows.historyEvidence.map(({ history_kind }) => history_kind),
+  );
+  const reconciliationHasHealthyHistoryEvidence =
+    rows.historyEvidence.length === 2 &&
+    historyKinds.size === 2 &&
+    historyKinds.has("orders") &&
+    historyKinds.has("deals") &&
+    rows.historyEvidence.every(
+      ({ result_state }) =>
+        result_state === "query_succeeded" ||
+        result_state === "empty_valid_result",
+    );
+  const tickObservationAgeSeconds =
+    tick === null
+      ? null
+      : (currentTime.getTime() - Date.parse(tick.observed_at)) / 1_000;
+  const tickObservationCurrent =
+    tickObservationAgeSeconds !== null &&
+    tickObservationAgeSeconds >= -MT5_OBSERVATION_MAX_AGE_SECONDS &&
+    tickObservationAgeSeconds <= MT5_OBSERVATION_MAX_AGE_SECONDS;
+  const currentTickAgeSeconds =
+    tick === null
+      ? null
+      : Math.max(
+          0,
+          Math.round(
+            ((currentTime.getTime() - Date.parse(tick.tick_at)) / 1_000) *
+              1_000,
+          ) / 1_000,
+        );
 
   let state: "healthy" | "degraded" | "blocked" | "unavailable" =
     account === null ? "unavailable" : "healthy";
   let reasonCode = account === null ? "MT5_OBSERVATION_UNAVAILABLE" : "HEALTHY";
-  if (verificationState === "verified_demo_unbound") {
-    state = "degraded";
-    reasonCode = "DEMO_ACCOUNT_UNBOUND";
+  if (account === null) {
+    state = "unavailable";
+    reasonCode = "MT5_OBSERVATION_UNAVAILABLE";
   } else if (
-    verificationState !== null &&
-    verificationState !== "verified_demo_bound"
+    account.trade_mode !== "demo" ||
+    (verificationState !== "verified_demo_bound" &&
+      verificationState !== "verified_demo_unbound")
   ) {
     state = "blocked";
     reasonCode = "ACCOUNT_VERIFICATION_BLOCKED";
-  }
-  if (tick?.freshness === "stale" || tick?.freshness === "future_invalid") {
+  } else if (tick !== null && !tickObservationCurrent) {
+    state = "unavailable";
+    reasonCode = "MT5_OBSERVATION_STALE";
+  } else if (reconciliation === null) {
     state = "blocked";
-    reasonCode = tick.freshness === "stale" ? "TICK_STALE" : "TICK_FROM_FUTURE";
-  }
-  if (
-    reconciliation?.status === "completed" &&
-    reconciliation.outcome !== "matched"
-  ) {
+    reasonCode = "RECONCILIATION_REQUIRED";
+  } else if (reconciliation.status === "running") {
+    state = "degraded";
+    reasonCode = "RECONCILIATION_PENDING";
+  } else if (reconciliation.outcome !== "matched") {
     state = "blocked";
     reasonCode = reconciliation.reason_code;
+  } else if (symbol === null) {
+    state = "blocked";
+    reasonCode = "SYMBOL_OBSERVATION_UNAVAILABLE";
+  } else if (symbol.usability_state !== "usable") {
+    state = "blocked";
+    reasonCode = symbol.unusable_reason ?? "SYMBOL_UNUSABLE";
+  } else if (tick === null) {
+    state = "blocked";
+    reasonCode = "TICK_UNAVAILABLE";
+  } else if (!reconciliationMatchesCurrentObservations) {
+    state = "blocked";
+    reasonCode = "RECONCILIATION_OBSERVATION_MISMATCH";
+  } else if (
+    reconciliation.mismatch_count !== 0 ||
+    rows.mismatches.length !== 0 ||
+    !reconciliationHasHealthyHistoryEvidence
+  ) {
+    state = "blocked";
+    reasonCode = "RECONCILIATION_EVIDENCE_INCOMPLETE";
+  } else if (tick.freshness !== "live") {
+    state = "blocked";
+    reasonCode =
+      tick.freshness === "future_invalid"
+        ? "TICK_FROM_FUTURE"
+        : tick.freshness === "stale"
+          ? "TICK_STALE"
+          : tick.freshness === "delayed"
+            ? "TICK_DELAYED"
+            : "TICK_UNAVAILABLE";
+  } else if (verificationState === "verified_demo_unbound") {
+    state = "degraded";
+    reasonCode = "DEMO_ACCOUNT_UNBOUND";
   }
 
   const observedAt =
@@ -115,6 +200,14 @@ export function mt5ConsoleFromReadRows(
             schemaVersion: symbol.schema_version,
             canonicalSymbol: symbol.canonical_symbol,
             brokerSymbol: symbol.broker_symbol,
+            currencyBase: specificationValue(
+              symbol.normalized_specification,
+              "base_currency",
+            ),
+            currencyProfit: specificationValue(
+              symbol.normalized_specification,
+              "profit_currency",
+            ),
             specificationFingerprint: symbol.specification_fingerprint,
             usabilityState: symbol.usability_state,
             unusableReason: symbol.unusable_reason,
@@ -179,6 +272,17 @@ export function mt5ConsoleFromReadRows(
               resourceReference: mismatch.resource_reference,
               reasonCode: mismatch.reason_code,
             })),
+            historyEvidence: rows.historyEvidence.map((evidence) => ({
+              historyKind: evidence.history_kind,
+              requestedStartAt: evidence.requested_start_at,
+              requestedEndAt: evidence.requested_end_at,
+              queryCompletedAt: evidence.query_completed_at,
+              returnedCount: evidence.returned_count,
+              earliestReturnedAt: evidence.earliest_returned_at,
+              latestReturnedAt: evidence.latest_returned_at,
+              resultState: evidence.result_state,
+              reasonCode: evidence.reason_code,
+            })),
           },
     health: {
       observedAt,
@@ -188,18 +292,21 @@ export function mt5ConsoleFromReadRows(
       schemaVersion: "1",
       state,
       reasonCode,
-      packageAvailable: account !== null,
+      packageAvailable: account !== null && tickObservationCurrent,
       platform: "windows",
-      terminalConnected: account !== null,
+      terminalConnected: account !== null && tickObservationCurrent,
       terminalVersion: null,
       accountVerificationState: verificationState,
       maskedAccount: account?.masked_login ?? null,
       maskedServer: account?.masked_server ?? null,
       brokerSymbol: symbol?.broker_symbol ?? null,
       specificationFingerprint: symbol?.specification_fingerprint ?? null,
-      tickAgeSeconds: tick === null ? null : decimalString(tick.age_seconds),
+      tickAgeSeconds:
+        currentTickAgeSeconds === null
+          ? null
+          : decimalString(currentTickAgeSeconds),
       lastCompletedCandleAt: null,
-      lastSuccessfulObservationAt: account === null ? null : observedAt,
+      lastSuccessfulObservationAt: tickObservationCurrent ? observedAt : null,
       reconciliationOutcome: reconciliation?.outcome ?? null,
       openPositionCount: reconciliation?.open_position_count ?? null,
       activeOrderCount: reconciliation?.active_order_count ?? null,
