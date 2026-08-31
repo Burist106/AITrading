@@ -21,6 +21,7 @@ const TABLE_NAMES = [
   "feature_snapshots",
   "market_snapshots",
   "mt5_account_observations",
+  "mt5_history_query_evidence",
   "mt5_latest_tick_observations",
   "mt5_reconciliation_mismatches",
   "mt5_reconciliation_runs",
@@ -157,11 +158,11 @@ describe("generated database type parity", () => {
     expect(POSITION_STATUSES).toHaveLength(5);
   });
 
-  it("contains exactly the 26 Milestone 2 tables", () => {
+  it("contains exactly the 27 Milestone 2 tables", () => {
     expectTypeOf<keyof Database["public"]["Tables"]>().toEqualTypeOf<
       (typeof TABLE_NAMES)[number]
     >();
-    expect(TABLE_NAMES).toHaveLength(26);
+    expect(TABLE_NAMES).toHaveLength(27);
     expect(TABLE_NAMES).not.toContain("notifications");
     expect(TABLE_NAMES).not.toContain("candles");
     expect(TABLE_NAMES).not.toContain("strategies");

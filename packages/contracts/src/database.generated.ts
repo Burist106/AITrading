@@ -151,9 +151,15 @@ export type Database = {
       broker_symbols: {
         Row: {
           account_currency: string;
+          base_currency: string | null;
           broker_symbol: string;
           calculation_mode: string;
           canonical_symbol: string;
+          confirmation_status: string;
+          confirmation_version: number | null;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          confirmed_specification_fingerprint: string | null;
           contract_size: number;
           created_at: string;
           digits: number;
@@ -163,6 +169,7 @@ export type Database = {
           minimum_volume: number;
           owner_id: string;
           point_size: number;
+          profit_currency: string | null;
           specification_version: string;
           stop_level: number;
           tick_size: number;
@@ -172,9 +179,15 @@ export type Database = {
         };
         Insert: {
           account_currency: string;
+          base_currency?: string | null;
           broker_symbol: string;
           calculation_mode: string;
           canonical_symbol?: string;
+          confirmation_status?: string;
+          confirmation_version?: number | null;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          confirmed_specification_fingerprint?: string | null;
           contract_size: number;
           created_at?: string;
           digits: number;
@@ -184,6 +197,7 @@ export type Database = {
           minimum_volume: number;
           owner_id: string;
           point_size: number;
+          profit_currency?: string | null;
           specification_version: string;
           stop_level: number;
           tick_size: number;
@@ -193,9 +207,15 @@ export type Database = {
         };
         Update: {
           account_currency?: string;
+          base_currency?: string | null;
           broker_symbol?: string;
           calculation_mode?: string;
           canonical_symbol?: string;
+          confirmation_status?: string;
+          confirmation_version?: number | null;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          confirmed_specification_fingerprint?: string | null;
           contract_size?: number;
           created_at?: string;
           digits?: number;
@@ -205,6 +225,7 @@ export type Database = {
           minimum_volume?: number;
           owner_id?: string;
           point_size?: number;
+          profit_currency?: string | null;
           specification_version?: string;
           stop_level?: number;
           tick_size?: number;
@@ -213,6 +234,13 @@ export type Database = {
           volume_step?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "broker_symbols_confirmed_by_fkey";
+            columns: ["confirmed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "broker_symbols_trading_account_id_owner_id_fkey";
             columns: ["trading_account_id", "owner_id"];
@@ -397,6 +425,62 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      mt5_history_query_evidence: {
+        Row: {
+          created_at: string;
+          earliest_returned_at: string | null;
+          history_kind: string;
+          id: string;
+          latest_returned_at: string | null;
+          owner_id: string;
+          query_completed_at: string | null;
+          reason_code: string;
+          reconciliation_id: string;
+          requested_end_at: string;
+          requested_start_at: string;
+          result_state: string;
+          returned_count: number;
+        };
+        Insert: {
+          created_at?: string;
+          earliest_returned_at?: string | null;
+          history_kind: string;
+          id?: string;
+          latest_returned_at?: string | null;
+          owner_id: string;
+          query_completed_at?: string | null;
+          reason_code: string;
+          reconciliation_id: string;
+          requested_end_at: string;
+          requested_start_at: string;
+          result_state: string;
+          returned_count: number;
+        };
+        Update: {
+          created_at?: string;
+          earliest_returned_at?: string | null;
+          history_kind?: string;
+          id?: string;
+          latest_returned_at?: string | null;
+          owner_id?: string;
+          query_completed_at?: string | null;
+          reason_code?: string;
+          reconciliation_id?: string;
+          requested_end_at?: string;
+          requested_start_at?: string;
+          result_state?: string;
+          returned_count?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mt5_history_query_evidence_reconciliation_id_owner_id_fkey";
+            columns: ["reconciliation_id", "owner_id"];
+            isOneToOne: false;
+            referencedRelation: "mt5_reconciliation_runs";
+            referencedColumns: ["id", "owner_id"];
           },
         ];
       };

@@ -23,7 +23,7 @@ select is(
       and relation.relkind = 'r'
       and relation.relrowsecurity and relation.relforcerowsecurity
   ),
-  5::bigint,
+  6::bigint,
   'every MT5 observation table enables and forces RLS'
 );
 select ok(
@@ -31,7 +31,8 @@ select ok(
   and has_table_privilege('authenticated', 'public.mt5_symbol_observations', 'select')
   and has_table_privilege('authenticated', 'public.mt5_latest_tick_observations', 'select')
   and has_table_privilege('authenticated', 'public.mt5_reconciliation_runs', 'select')
-  and has_table_privilege('authenticated', 'public.mt5_reconciliation_mismatches', 'select'),
+  and has_table_privilege('authenticated', 'public.mt5_reconciliation_mismatches', 'select')
+  and has_table_privilege('authenticated', 'public.mt5_history_query_evidence', 'select'),
   'authenticated receives read-only table privileges'
 );
 select ok(
@@ -43,7 +44,8 @@ select ok(
   not has_table_privilege('aurum_worker', 'public.mt5_account_observations', 'insert')
   and not has_table_privilege('aurum_worker', 'public.mt5_symbol_observations', 'insert')
   and not has_table_privilege('aurum_worker', 'public.mt5_latest_tick_observations', 'update')
-  and not has_table_privilege('aurum_worker', 'public.mt5_reconciliation_runs', 'insert'),
+  and not has_table_privilege('aurum_worker', 'public.mt5_reconciliation_runs', 'insert')
+  and not has_table_privilege('aurum_worker', 'public.mt5_history_query_evidence', 'insert'),
   'Worker receives no direct observation DML'
 );
 select ok(
@@ -144,16 +146,45 @@ select
     'reconciliation_id', '00000000-0000-4000-8000-000000008201',
     'started_at', '2026-08-28T00:00:03Z',
     'completed_at', '2026-08-28T00:00:04Z',
-    'outcome', 'matched',
-    'reason_code', 'HEALTHY',
+    'outcome', 'mismatch',
+    'reason_code', 'RECONCILIATION_INCOMPLETE',
     'account_fingerprint', 'mt5-account-v1:' || pg_catalog.repeat('a', 64),
     'server_fingerprint', 'mt5-server-v1:' || pg_catalog.repeat('b', 64),
+    'broker_symbol', 'XAUUSD',
     'symbol_specification_fingerprint', 'mt5-spec-v1:' || pg_catalog.repeat('c', 64),
     'open_position_count', 0,
     'active_order_count', 0,
     'order_history_count', 0,
     'deal_history_count', 0,
-    'mismatches', '[]'::jsonb
+    'order_history_evidence', pg_catalog.jsonb_build_object(
+      'history_kind', 'orders',
+      'requested_start_at', '2026-08-27T00:00:02Z',
+      'requested_end_at', '2026-08-28T00:00:02Z',
+      'query_completed_at', '2026-08-28T00:00:02.500Z',
+      'returned_count', 0,
+      'earliest_returned_at', null,
+      'latest_returned_at', null,
+      'result_state', 'empty_valid_result',
+      'reason_code', 'HISTORY_EMPTY_VALID_RESULT'
+    ),
+    'deal_history_evidence', pg_catalog.jsonb_build_object(
+      'history_kind', 'deals',
+      'requested_start_at', '2026-08-27T00:00:02Z',
+      'requested_end_at', '2026-08-28T00:00:02Z',
+      'query_completed_at', '2026-08-28T00:00:02.750Z',
+      'returned_count', 0,
+      'earliest_returned_at', null,
+      'latest_returned_at', null,
+      'result_state', 'empty_valid_result',
+      'reason_code', 'HISTORY_EMPTY_VALID_RESULT'
+    ),
+    'mismatches', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'category', 'EXECUTION_RESULT_UNCERTAIN',
+      'severity', 'critical',
+      'resource_type', 'system_command',
+      'resource_reference', '00000000-0000-4000-8000-000000008299',
+      'reason_code', 'RECONCILIATION_INCOMPLETE'
+    ))
   ) as report_payload;
 grant select on mt5_payloads to aurum_worker;
 set local role aurum_worker;
@@ -312,7 +343,7 @@ select results_eq(
   $$select status, outcome, mismatch_count
     from public.mt5_reconciliation_runs
     where id = '00000000-0000-4000-8000-000000008201'$$,
-  $$values ('completed', 'matched', 0)$$,
+  $$values ('completed', 'mismatch', 1)$$,
   'completed reconciliation preserves the submitted safe result'
 );
 select throws_ok(
@@ -395,8 +426,8 @@ select is(
       'mt5_reconciliation_mismatch_recorded', 'mt5_reconciliation_completed'
     )
   ),
-  7::bigint,
-  'each accepted MT5 state change appends bounded audit evidence'
+  5::bigint,
+  'security-significant MT5 state changes append bounded audit evidence'
 );
 select ok(
   not exists (
