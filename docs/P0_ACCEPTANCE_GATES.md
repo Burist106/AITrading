@@ -2,7 +2,7 @@
 
 These gates apply before any Demo broker execution is introduced.
 
-`[x]` means verified in the current workspace. `[ ]` means deliberately pending. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**; it adds read-only observation and reconciliation only and does not authorize execution. Milestone 3 is not started.
+`[x]` means verified for the identified implementation. `[ ]` means deliberately pending. Milestone 2 retains the release status **COMPLETE WITH DOCUMENTED LIMITATIONS** only after the current heartbeat/liveness patch passes its final local gates and a new clean-checkout Pull Request run. The local gates passed on 2026-09-02; the new Pull Request run is pending, and the previous source-review CI result does not verify this patch. The milestone remains read-only and does not authorize execution. Milestone 3 is not started.
 
 ## Repository and quality
 
@@ -13,6 +13,8 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Formatting and linting pass
 - [x] The final Milestone 2 source-review patch passes all three Pull Request jobs on a clean checkout
 - [x] No credentials or secret values are committed
+- [x] The heartbeat/liveness patch passes the final local format, lint, type, test, build, security, database, and generated-type gates
+- [ ] The heartbeat/liveness patch HEAD passes `quality`, `database`, and `windows-mt5-boundary` in a new clean-checkout Pull Request run
 
 ## Design traceability
 
@@ -59,6 +61,9 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Open positions are not silently assumed closed
 - [x] Worker restart and reconnect reconciliation are designed and tested before execution
 - [x] Reconciliation detects account, server, confirmed-specification, Position, Order, current bounded-history-query, clock, and uncertain-execution mismatches without operational mutation
+- [x] All three enabled execution components renew bounded heartbeats during their owned lightweight poll cadence without audit growth
+- [x] Worker heartbeat remains capped by full reconciliation, and `reconciliation_required` prevents Healthy until a successful full cycle
+- [x] LIVE, DELAYED, STALE, FUTURE_INVALID, and UNAVAILABLE tick mappings plus Web missing/expired/invalid `unknown` behavior pass their final regression gates
 
 ## Broker execution authorization gate
 

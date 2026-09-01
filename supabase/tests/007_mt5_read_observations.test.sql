@@ -5,7 +5,7 @@ grant usage on schema extensions to aurum_worker;
 grant execute on all functions in schema extensions to aurum_worker;
 set local search_path = public, extensions;
 
-select plan(40);
+select plan(41);
 
 select has_table('public', 'mt5_account_observations', 'account observations exist');
 select has_table('public', 'mt5_symbol_observations', 'symbol observations exist');
@@ -254,11 +254,34 @@ select is(
   'TICK_RECORDED',
   'newer latest tick replaces the bounded current row'
 );
+select is(
+  (
+    select pg_catalog.count(*)
+    from (
+      select public.worker_upsert_mt5_latest_tick(
+        (select tick_payload from mt5_payloads)
+          || pg_catalog.jsonb_build_object(
+            'observed_at',
+            '2026-08-28T00:00:03Z'::timestamptz
+              + pg_catalog.make_interval(secs => tick_number.sequence),
+            'tick_at',
+            '2026-08-28T00:00:02Z'::timestamptz
+              + pg_catalog.make_interval(secs => tick_number.sequence),
+            'trace_id', 'trace-tick-burst-' || tick_number.sequence::text
+          )
+      ) as result_code
+      from pg_catalog.generate_series(1, 20) as tick_number(sequence)
+    ) as tick_result
+    where tick_result.result_code = 'TICK_RECORDED'
+  ),
+  20::bigint,
+  'many routine tick updates succeed through the bounded current-row upsert'
+);
 reset role;
 select results_eq(
   $$select count(*), max(version) from public.mt5_latest_tick_observations$$,
-  $$values (1::bigint, 2)$$,
-  'latest tick storage retains one row and increments its version'
+  $$values (1::bigint, 22)$$,
+  'many latest ticks retain one row and increment its bounded current version'
 );
 set local role aurum_worker;
 select is(
@@ -427,7 +450,7 @@ select is(
     )
   ),
   5::bigint,
-  'security-significant MT5 state changes append bounded audit evidence'
+  'many routine ticks append no audit rows while five security-significant MT5 changes remain audited'
 );
 select ok(
   not exists (

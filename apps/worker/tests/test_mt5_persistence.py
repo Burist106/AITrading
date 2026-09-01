@@ -6,16 +6,21 @@ from datetime import timedelta
 import pytest
 from mt5_factories import NOW
 
-from aurum_worker.adapters.persistence_mt5 import WorkerRpcMt5ObservationPersistence
+from aurum_worker.adapters.persistence_mt5 import (
+    InMemoryMt5ObservationPersistence,
+    WorkerRpcMt5ObservationPersistence,
+)
 from aurum_worker.models.mt5 import (
-    HealthState,
+    ComponentHeartbeat,
+    ComponentHeartbeatState,
     HistoryQueryEvidence,
     HistoryQueryResultState,
-    Mt5HealthSnapshot,
+    Mt5ComponentCode,
     Mt5ReadFailure,
     Mt5ReasonCode,
     ReconciliationOutcome,
     ReconciliationReport,
+    SafeMt5Error,
 )
 
 
@@ -33,6 +38,33 @@ class RecordingClient:
         return self.responses.get(
             function, {"result_code": default_codes.get(function, "IDEMPOTENT_REPLAY")}
         )
+
+
+@dataclass
+class RaisingClient:
+    error: Exception
+    calls: list[tuple[str, dict[str, object]]] = field(default_factory=list)
+
+    def call(self, function: str, parameters: dict[str, object]) -> dict[str, object]:
+        self.calls.append((function, parameters))
+        raise self.error
+
+
+def component_heartbeat(
+    component_code: Mt5ComponentCode = Mt5ComponentCode.WORKER,
+    *,
+    state: ComponentHeartbeatState = ComponentHeartbeatState.HEALTHY,
+    detail: Mt5ReasonCode = Mt5ReasonCode.HEALTHY,
+    observed_offset_seconds: int = 0,
+) -> ComponentHeartbeat:
+    return ComponentHeartbeat(
+        component_code=component_code,
+        state=state,
+        detail=detail,
+        observed_at=NOW + timedelta(seconds=observed_offset_seconds),
+        valid_for_seconds=30,
+        trace_id="heartbeat-persistence",
+    )
 
 
 def reconciliation_report(broker_symbol: str | None) -> ReconciliationReport:
@@ -182,40 +214,75 @@ def test_denied_write_rpc_result_fails_closed_without_echoing_server_code() -> N
         responses={"worker_record_heartbeat": {"result_code": "WORKER_UNAUTHORIZED"}}
     )
     persistence = WorkerRpcMt5ObservationPersistence(client)
-    snapshot = Mt5HealthSnapshot(
-        observed_at=NOW,
-        source="mt5",
-        adapter_version="test",
-        trace_id="trace",
-        state=HealthState.UNAVAILABLE,
-        reason_code=Mt5ReasonCode.TERMINAL_DISCONNECTED,
-        package_available=True,
-        platform="windows",
-        terminal_connected=False,
+    heartbeat = component_heartbeat(
+        state=ComponentHeartbeatState.FAILED,
+        detail=Mt5ReasonCode.TERMINAL_DISCONNECTED,
     )
 
     with pytest.raises(Mt5ReadFailure) as raised:
-        persistence.record_heartbeat(snapshot)
+        persistence.record_component_heartbeat(heartbeat)
 
     assert raised.value.error.reason_code is Mt5ReasonCode.DATABASE_REPORT_FAILED
     assert "WORKER_UNAUTHORIZED" not in raised.value.error.safe_detail
 
 
+@pytest.mark.parametrize("operation", ["heartbeat", "incident"])
+def test_generic_heartbeat_transport_failure_is_fixed_and_secret_free(
+    operation: str,
+) -> None:
+    sentinel = r"postgres://secret-token@host/C:\Users\private\terminal.ini"
+    client = RaisingClient(RuntimeError(sentinel))
+    persistence = WorkerRpcMt5ObservationPersistence(client)
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        if operation == "heartbeat":
+            persistence.record_component_heartbeat(component_heartbeat())
+        else:
+            persistence.record_incident(
+                "DATABASE_REPORT_FAILED",
+                "warning",
+                "MT5 polling failure",
+                "Persistence is unavailable.",
+                "transport-failure",
+                NOW,
+            )
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.DATABASE_REPORT_FAILED
+    assert raised.value.error.safe_detail == (
+        "Worker persistence transport is unavailable."
+    )
+    assert raised.value.error.retryable is True
+    assert sentinel not in str(raised.value)
+    assert sentinel not in raised.value.error.safe_detail
+    assert raised.value.__cause__ is None
+    assert raised.value.__suppress_context__ is True
+
+
+def test_typed_heartbeat_transport_failure_is_preserved_unchanged() -> None:
+    original = Mt5ReadFailure(
+        SafeMt5Error(
+            reason_code=Mt5ReasonCode.DATABASE_REPORT_FAILED,
+            safe_detail="Typed persistence failure.",
+            retryable=True,
+        )
+    )
+    persistence = WorkerRpcMt5ObservationPersistence(RaisingClient(original))
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        persistence.record_component_heartbeat(component_heartbeat())
+
+    assert raised.value is original
+
+
 def test_heartbeat_and_incident_reuse_existing_safe_rpc_shapes() -> None:
     client = RecordingClient()
     persistence = WorkerRpcMt5ObservationPersistence(client)
-    snapshot = Mt5HealthSnapshot(
-        observed_at=NOW,
-        source="mt5",
-        adapter_version="test",
-        trace_id="trace",
-        state=HealthState.UNAVAILABLE,
-        reason_code=Mt5ReasonCode.TERMINAL_DISCONNECTED,
-        package_available=True,
-        platform="windows",
-        terminal_connected=False,
+    heartbeat_model = component_heartbeat(
+        Mt5ComponentCode.MARKET_DATA,
+        state=ComponentHeartbeatState.DEGRADED,
+        detail=Mt5ReasonCode.TICK_DELAYED,
     )
-    persistence.record_heartbeat(snapshot)
+    persistence.record_component_heartbeat(heartbeat_model)
     persistence.record_incident(
         "TERMINAL_DISCONNECTED",
         "warning",
@@ -227,10 +294,34 @@ def test_heartbeat_and_incident_reuse_existing_safe_rpc_shapes() -> None:
 
     heartbeat = client.calls[0]
     assert heartbeat[0] == "worker_record_heartbeat"
-    assert heartbeat[1]["component_code"] == "execution.worker"
-    assert heartbeat[1]["state"] == "failed"
+    assert heartbeat[1] == {
+        "component_code": "execution.market_data",
+        "state": "degraded",
+        "detail": "TICK_DELAYED",
+        "observed_at": NOW.isoformat(),
+        "valid_for_seconds": 30,
+    }
     incident = client.calls[1]
     assert incident[0] == "worker_record_incident"
     assert "trace_id" not in incident[1]
     assert incident[1]["occurred_at"] == NOW.isoformat()
     assert isinstance(incident[1]["request_id"], str)
+
+
+def test_in_memory_component_heartbeats_are_bounded_upserts() -> None:
+    persistence = InMemoryMt5ObservationPersistence()
+
+    for component_code in Mt5ComponentCode:
+        persistence.record_component_heartbeat(component_heartbeat(component_code))
+
+    renewed = component_heartbeat(
+        Mt5ComponentCode.MARKET_DATA,
+        state=ComponentHeartbeatState.DEGRADED,
+        detail=Mt5ReasonCode.TICK_DELAYED,
+        observed_offset_seconds=5,
+    )
+    persistence.record_component_heartbeat(renewed)
+
+    assert set(persistence.heartbeats) == set(Mt5ComponentCode)
+    assert len(persistence.heartbeats) == 3
+    assert persistence.heartbeats[Mt5ComponentCode.MARKET_DATA] == renewed

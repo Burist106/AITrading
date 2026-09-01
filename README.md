@@ -11,16 +11,20 @@ Aurum Console is a safety-first control-plane and Windows Worker foundation for 
 - Maximum open Positions: **1**
 - Future executable proposals require a Stop Loss
 - Completed: **Bootstrap and Milestone 1**
-- Milestone 2: **COMPLETE WITH DOCUMENTED LIMITATIONS**
+- Milestone 2 release status: **COMPLETE WITH DOCUMENTED LIMITATIONS**, contingent on the heartbeat/liveness patch passing its final local gates and a new clean-checkout Pull Request run; the local gates passed on 2026-09-02 and the new Pull Request run is pending
 - Milestone 3: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**
 
-Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch.
+Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch. The previously green source-review CI run does not verify the newer heartbeat/liveness changes; the status above must not be treated as re-verified until the new patch HEAD passes all required jobs.
 
 ## Architecture
 
 The Next.js Web Console reads owner-scoped, sanitized views. The Python Worker owns local read-only MT5 access behind a typed port. Supabase stores durable owner-scoped domain state and exposes narrowly granted RPCs; forced RLS and a dedicated `aurum_worker` role prevent browser or Worker direct writes to protected tables. Shared TypeScript contracts and cross-language fixtures keep JSON boundaries explicit.
 
-Milestone 2 treats discovery, observation, and confirmation as different states. A broker symbol is XAU/USD only when its native base/profit currencies are `XAU`/`USD`, and an observed fingerprint never confirms itself. Lightweight tick polling, Position/active-Order observation, and full reconciliation have separate bounded cadences; only a full cycle queries Order/Deal history and persists its exact current evidence. Routine tick telemetry does not grow the security audit log.
+Milestone 2 treats discovery, observation, and confirmation as different states. A broker symbol is XAU/USD only when its native base/profit currencies are `XAU`/`USD`, and an observed fingerprint never confirms itself. Lightweight tick polling, Position/active-Order observation, and full reconciliation default to 5, 15, and 600 seconds; only a full cycle queries Order/Deal history and persists its exact current evidence.
+
+The poller owns three explicit component heartbeats: `execution.worker` (authoritative Worker state), `execution.mt5_adapter` (Terminal/API and Demo-account read safety), and `execution.market_data` (XAU/USD tick freshness). Routine short polls renew the components they actually observe, but the Worker heartbeat remains capped by the last full reconciliation. `reconciliation_required` prevents Worker Healthy, and fresh market data cannot clear that gate. Heartbeats default to a 30-second TTL, are bounded to 15–300 seconds, and must be at least three tick intervals. Missing, expired, duplicate, or invalid heartbeat evidence is displayed as `unknown`. A component reported Healthy describes only its narrow read-only responsibility; it is not trading eligibility.
+
+Latest ticks and component heartbeats are bounded versioned upserts. Neither routine tick updates nor routine heartbeat renewals append security-audit rows; security-sensitive actions and important lifecycle incidents retain their audit paths.
 
 ```text
 apps/web                 Thai-first Next.js read-only console
@@ -75,6 +79,8 @@ pnpm check
 
 The gate includes formatting, lint, TypeScript/Python type checks, unit/component tests, production builds, a tracked-file and Git-history secret scan, and syntax-aware production runtime-boundary checks.
 
+Heartbeat/liveness regression tests cover continuous renewal, authoritative-state caps, tick-freshness mapping, Web expiry handling, bounded database upserts, RLS, and no-audit-growth behavior. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; format, lint, type-check, production build, generated types, dependency checks, and security scans also passed. The new Pull Request conclusions remain pending and are not claimed here.
+
 Run the dependency checks separately:
 
 ```text
@@ -107,6 +113,7 @@ pnpm db:stop
 - No full MT5 login, account holder name, full terminal path, privileged Supabase key, token, or cookie appears in browser-visible output or repository history.
 - The frontend cannot write MT5 observations or protected broker/order/Position state.
 - Ambiguous, stale, incomplete, non-Demo, mismatched, or unavailable state fails closed.
+- Healthy component telemetry never overrides reconciliation or establishes proposal, risk, approval, command, or trading eligibility.
 - Design prototypes are never copied directly into production components.
 
 ## Project documentation

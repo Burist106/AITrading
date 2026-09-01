@@ -11,6 +11,7 @@ import {
   buildPositionFixture,
   buildPositionSizing,
   buildRiskChecks,
+  buildSystemHealth,
   buildTradeProposal,
   deriveSampleMetrics,
   getSample,
@@ -73,6 +74,47 @@ describe("Human Approval fixture arithmetic", () => {
 });
 
 describe("safety scenarios", () => {
+  it("uses the three exact execution heartbeat identities and conservative states", () => {
+    const healthy = buildSystemHealth("no_signal").components.slice(0, 3);
+    expect(
+      healthy.map(({ code, labelTh, state }) => ({ code, labelTh, state })),
+    ).toEqual([
+      {
+        code: "execution.worker",
+        labelTh: "Aurum Worker",
+        state: "healthy",
+      },
+      {
+        code: "execution.mt5_adapter",
+        labelTh: "การเชื่อมต่อ MT5",
+        state: "healthy",
+      },
+      {
+        code: "execution.market_data",
+        labelTh: "ข้อมูลตลาด XAU/USD",
+        state: "healthy",
+      },
+    ]);
+
+    const nonDemo = buildSystemHealth("live_account_detected").components;
+    expect(nonDemo[0]).toMatchObject({ state: "failed" });
+    expect(nonDemo[1]).toMatchObject({ state: "failed" });
+
+    const disconnected = buildSystemHealth("mt5_disconnected").components;
+    expect(disconnected.slice(0, 3).map(({ state }) => state)).toEqual([
+      "failed",
+      "failed",
+      "failed",
+    ]);
+
+    const stale = buildSystemHealth("market_data_stale").components;
+    expect(stale[0]).toMatchObject({ state: "failed" });
+    expect(stale[2]).toMatchObject({
+      state: "failed",
+      detail: expect.stringContaining("TICK_STALE"),
+    });
+  });
+
   it("blocks when broker minimum volume exceeds the risk budget", () => {
     const sample = getSample("minimum_lot_exceeds_risk");
     const sizing = buildPositionSizing(sample);

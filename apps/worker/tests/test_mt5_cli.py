@@ -219,18 +219,28 @@ def test_opted_in_smoke_wrong_symbol_is_blocked(
     assert adapter.call_log[-1] == "disconnect"
 
 
-def test_opted_in_smoke_stale_tick_is_blocked(
+@pytest.mark.parametrize(
+    ("freshness", "reason"),
+    [
+        (TickFreshness.DELAYED, Mt5ReasonCode.TICK_DELAYED),
+        (TickFreshness.STALE, Mt5ReasonCode.TICK_STALE),
+        (TickFreshness.FUTURE_INVALID, Mt5ReasonCode.TICK_FROM_FUTURE),
+    ],
+)
+def test_opted_in_smoke_non_live_tick_is_blocked_with_exact_reason(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    freshness: TickFreshness,
+    reason: Mt5ReasonCode,
 ) -> None:
-    adapter = fake_adapter(freshness=TickFreshness.STALE)
+    adapter = fake_adapter(freshness=freshness)
     install_smoke_doubles(monkeypatch, adapter)
 
     result = mt5_cli._smoke(smoke_config(tmp_path / "terminal64.exe"))
 
     assert result == 2
-    assert capsys.readouterr().out.strip() == "BLOCKED — TICK_STALE"
+    assert capsys.readouterr().out.strip() == f"BLOCKED — {reason.value}"
     assert adapter.call_log[-1] == "disconnect"
 
 

@@ -26,8 +26,64 @@ const PROPOSAL_ID = "00000000-0000-4000-8000-000000000010";
 const POSITION_ID = "00000000-0000-4000-8000-000000000020";
 const COMMAND_ID = "00000000-0000-4000-8000-000000000030";
 const COMPONENT_ID = "00000000-0000-4000-8000-000000000040";
+const MT5_ADAPTER_COMPONENT_ID = "00000000-0000-4000-8000-000000000041";
+const MARKET_DATA_COMPONENT_ID = "00000000-0000-4000-8000-000000000042";
 const NOW = "2026-08-26T12:00:00.000Z";
 const HISTORY_START = "2026-08-25T12:00:00.000Z";
+
+const executionComponents: SystemComponentReadRow[] = [
+  {
+    id: COMPONENT_ID,
+    owner_id: OWNER_ID,
+    code: "execution.worker",
+    label_th: "Aurum Worker",
+    plane: "execution_plane",
+    expected_heartbeat_seconds: 15,
+    enabled: true,
+    created_at: "2026-08-26T10:00:00.000Z",
+  },
+  {
+    id: MT5_ADAPTER_COMPONENT_ID,
+    owner_id: OWNER_ID,
+    code: "execution.mt5_adapter",
+    label_th: "การเชื่อมต่อ MT5",
+    plane: "execution_plane",
+    expected_heartbeat_seconds: 15,
+    enabled: true,
+    created_at: "2026-08-26T10:00:00.000Z",
+  },
+  {
+    id: MARKET_DATA_COMPONENT_ID,
+    owner_id: OWNER_ID,
+    code: "execution.market_data",
+    label_th: "ข้อมูลตลาด XAU/USD",
+    plane: "execution_plane",
+    expected_heartbeat_seconds: 15,
+    enabled: true,
+    created_at: "2026-08-26T10:00:00.000Z",
+  },
+];
+
+function heartbeatRow(
+  componentId: string,
+  heartbeatId: string,
+  overrides: Partial<SystemHeartbeatReadRow> = {},
+): SystemHeartbeatReadRow {
+  return {
+    id: heartbeatId,
+    owner_id: OWNER_ID,
+    system_component_id: componentId,
+    worker_id: "demo-worker",
+    state: "healthy",
+    detail: "HEALTHY",
+    observed_at: "2026-08-26T11:59:45.000Z",
+    expires_at: "2026-08-26T12:00:15.000Z",
+    version: 2,
+    created_at: "2026-08-26T11:58:00.000Z",
+    updated_at: "2026-08-26T11:59:45.000Z",
+    ...overrides,
+  };
+}
 
 const proposalRow: TradeProposalReadRow = {
   id: PROPOSAL_ID,
@@ -652,121 +708,323 @@ describe("owner-scoped control-plane reads", () => {
     expectOwnerScope(gateway.queries);
   });
 
-  it("keeps absent and stale heartbeat evidence explicit", async () => {
-    const components: SystemComponentReadRow[] = [
-      {
-        id: COMPONENT_ID,
-        owner_id: OWNER_ID,
-        code: "worker",
-        label_th: "เวิร์กเกอร์",
-        plane: "execution_plane",
-        expected_heartbeat_seconds: 30,
-        enabled: true,
-        created_at: "2026-08-26T10:00:00.000Z",
-      },
-      {
-        id: "00000000-0000-4000-8000-000000000041",
-        owner_id: OWNER_ID,
-        code: "database",
-        label_th: "ฐานข้อมูล",
-        plane: "control_plane",
-        expected_heartbeat_seconds: null,
-        enabled: true,
-        created_at: "2026-08-26T10:00:00.000Z",
-      },
+  it("keeps expired and missing heartbeats unknown, then honors lightweight renewal", async () => {
+    const expiredRows = [
+      heartbeatRow(COMPONENT_ID, "00000000-0000-4000-8000-000000000043", {
+        observed_at: "2026-08-26T11:59:00.000Z",
+        expires_at: "2026-08-26T11:59:30.000Z",
+        version: 1,
+      }),
+      heartbeatRow(
+        MT5_ADAPTER_COMPONENT_ID,
+        "00000000-0000-4000-8000-000000000044",
+        {
+          observed_at: "2026-08-26T11:59:00.000Z",
+          expires_at: "2026-08-26T11:59:30.000Z",
+          version: 1,
+        },
+      ),
     ];
-    const heartbeat: SystemHeartbeatReadRow = {
-      id: "00000000-0000-4000-8000-000000000042",
-      owner_id: OWNER_ID,
-      system_component_id: COMPONENT_ID,
-      worker_id: "demo-worker",
-      state: "healthy",
-      detail: "Last reported healthy before expiry",
-      observed_at: "2026-08-26T11:58:00.000Z",
-      expires_at: "2026-08-26T11:59:00.000Z",
-      version: 1,
-      created_at: "2026-08-26T11:58:00.000Z",
-      updated_at: "2026-08-26T11:58:00.000Z",
-    };
-    const gateway = new RecordingReadGateway(
+    const expiredGateway = new RecordingReadGateway(
       {},
       {
-        system_components: success(components),
-        system_heartbeats: success([heartbeat]),
+        system_components: success(executionComponents),
+        system_heartbeats: success(expiredRows),
       },
     );
-    const adapter = new OwnerScopedControlPlaneReadAdapter(
+    const expired = await new OwnerScopedControlPlaneReadAdapter(
       OWNER_ID,
-      gateway,
+      expiredGateway,
       () => new Date(NOW),
-    );
+    ).getHealthSnapshot();
 
-    const health = await adapter.getHealthSnapshot();
-
-    expect(health).toMatchObject({ capturedAt: NOW });
-    expect(health?.components[0]).toMatchObject({
-      code: "worker",
+    expect(
+      expired?.components.map(({ effectiveState }) => effectiveState),
+    ).toEqual(["unknown", "unknown", "unknown"]);
+    expect(expired?.components[0]?.heartbeat).toMatchObject({
+      reportedState: "healthy",
       effectiveState: "unknown",
-      heartbeat: {
-        reportedState: "healthy",
-        effectiveState: "unknown",
-        stale: true,
+      stale: true,
+    });
+    expect(expired?.components[2]?.heartbeat).toBeNull();
+
+    const renewedRows = [
+      heartbeatRow(COMPONENT_ID, "00000000-0000-4000-8000-000000000043", {
+        state: "failed",
+        detail: "RECONCILIATION_INCOMPLETE",
+      }),
+      heartbeatRow(
+        MT5_ADAPTER_COMPONENT_ID,
+        "00000000-0000-4000-8000-000000000044",
+      ),
+      heartbeatRow(
+        MARKET_DATA_COMPONENT_ID,
+        "00000000-0000-4000-8000-000000000045",
+        { state: "degraded", detail: "TICK_DELAYED" },
+      ),
+    ];
+    const renewedGateway = new RecordingReadGateway(
+      {},
+      {
+        system_components: success(executionComponents),
+        system_heartbeats: success(renewedRows),
       },
+    );
+    const renewed = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      renewedGateway,
+      () => new Date(NOW),
+    ).getHealthSnapshot();
+
+    expect(renewed).toMatchObject({ capturedAt: NOW });
+    expect(
+      renewed?.components.map(({ code, labelTh, effectiveState }) => ({
+        code,
+        labelTh,
+        effectiveState,
+      })),
+    ).toEqual([
+      {
+        code: "execution.worker",
+        labelTh: "Aurum Worker",
+        effectiveState: "failed",
+      },
+      {
+        code: "execution.mt5_adapter",
+        labelTh: "การเชื่อมต่อ MT5",
+        effectiveState: "healthy",
+      },
+      {
+        code: "execution.market_data",
+        labelTh: "ข้อมูลตลาด XAU/USD",
+        effectiveState: "degraded",
+      },
+    ]);
+    expect(renewed?.components[0]?.heartbeat).toMatchObject({
+      reportedState: "failed",
+      effectiveState: "failed",
+      stale: false,
     });
-    expect(health?.components[1]).toMatchObject({
-      code: "database",
-      effectiveState: "unknown",
-      heartbeat: null,
+    expect(renewed?.components[2]?.heartbeat).toMatchObject({
+      reportedState: "degraded",
+      effectiveState: "degraded",
+      detail: "TICK_DELAYED",
+      stale: false,
     });
-    expectOwnerScope(gateway.queries);
+    expectOwnerScope(expiredGateway.queries);
+    expectOwnerScope(renewedGateway.queries);
   });
 
-  it("fails closed on unsafe Worker identifiers and heartbeat detail", async () => {
-    const component: SystemComponentReadRow = {
-      id: COMPONENT_ID,
-      owner_id: OWNER_ID,
-      code: "worker",
-      label_th: "เวิร์กเกอร์",
-      plane: "execution_plane",
-      expected_heartbeat_seconds: 30,
-      enabled: true,
-      created_at: "2026-08-26T10:00:00.000Z",
-    };
-    const heartbeat: SystemHeartbeatReadRow = {
-      id: "00000000-0000-4000-8000-000000000042",
-      owner_id: OWNER_ID,
-      system_component_id: COMPONENT_ID,
-      worker_id: "demo-worker",
-      state: "healthy",
-      detail: "Healthy",
-      observed_at: "2026-08-26T11:58:00.000Z",
-      expires_at: "2026-08-26T12:01:00.000Z",
-      version: 1,
-      created_at: "2026-08-26T11:58:00.000Z",
-      updated_at: "2026-08-26T11:58:00.000Z",
-    };
+  it("derives unknown from unvalidated heartbeat rows without exposing detail", async () => {
+    const unsafeDetail = "Traceback at C:\\Private\\terminal64.exe";
+    const valid = heartbeatRow(
+      COMPONENT_ID,
+      "00000000-0000-4000-8000-000000000043",
+    );
+    const invalidRows: SystemHeartbeatReadRow[] = [
+      { ...valid, worker_id: "worker id with spaces" },
+      { ...valid, detail: unsafeDetail },
+      { ...valid, detail: "token=private-value" },
+      { ...valid, state: "unknown" },
+      { ...valid, state: "warning" },
+      { ...valid, expires_at: "2026-08-26T11:59:30.000Z" },
+      {
+        ...valid,
+        observed_at: NOW,
+        expires_at: "2026-08-26T12:00:14.000Z",
+      },
+      {
+        ...valid,
+        observed_at: NOW,
+        expires_at: "2026-08-26T12:00:30.500Z",
+      },
+      {
+        ...valid,
+        observed_at: NOW,
+        expires_at: "2026-08-26T12:05:01.000Z",
+      },
+      {
+        ...valid,
+        observed_at: NOW,
+        expires_at: "2027-08-26T12:00:00.000Z",
+      },
+      { ...valid, state: "healthy", detail: "TICK_STALE" },
+      { ...valid, state: "failed", detail: "HEALTHY" },
+      { ...valid, id: "not-a-uuid" },
+      { ...valid, version: 0 },
+    ];
 
-    for (const unsafeHeartbeat of [
-      { ...heartbeat, worker_id: "worker id with spaces" },
-      { ...heartbeat, detail: "token=private-value" },
-    ]) {
+    for (const invalidRow of invalidRows) {
       const gateway = new RecordingReadGateway(
         {},
         {
-          system_components: success([component]),
-          system_heartbeats: success([unsafeHeartbeat]),
+          system_components: success([executionComponents[0]!]),
+          system_heartbeats: success([invalidRow]),
         },
       );
-      const adapter = new OwnerScopedControlPlaneReadAdapter(
+      const health = await new OwnerScopedControlPlaneReadAdapter(
         OWNER_ID,
         gateway,
         () => new Date(NOW),
-      );
-      await expect(adapter.getHealthSnapshot()).rejects.toMatchObject({
-        code: "INVALID_READ_DATA",
-        relation: "system_components",
+      ).getHealthSnapshot();
+
+      expect(health?.components[0]).toMatchObject({
+        effectiveState: "unknown",
+        heartbeat: null,
       });
+      expect(JSON.stringify(health)).not.toContain(unsafeDetail);
+      expect(JSON.stringify(health)).not.toContain("private-value");
     }
+
+    const invalidMarketGateway = new RecordingReadGateway(
+      {},
+      {
+        system_components: success([executionComponents[2]!]),
+        system_heartbeats: success([
+          heartbeatRow(
+            MARKET_DATA_COMPONENT_ID,
+            "00000000-0000-4000-8000-000000000045",
+            { state: "degraded", detail: "DEMO_ACCOUNT_UNBOUND" },
+          ),
+        ]),
+      },
+    );
+    const invalidMarket = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      invalidMarketGateway,
+      () => new Date(NOW),
+    ).getHealthSnapshot();
+    expect(invalidMarket?.components[0]).toMatchObject({
+      effectiveState: "unknown",
+      heartbeat: null,
+    });
+
+    const invalidFailedMarketGateway = new RecordingReadGateway(
+      {},
+      {
+        system_components: success([executionComponents[2]!]),
+        system_heartbeats: success([
+          heartbeatRow(
+            MARKET_DATA_COMPONENT_ID,
+            "00000000-0000-4000-8000-000000000045",
+            { state: "failed", detail: "REAL_ACCOUNT_BLOCKED" },
+          ),
+        ]),
+      },
+    );
+    const invalidFailedMarket = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      invalidFailedMarketGateway,
+      () => new Date(NOW),
+    ).getHealthSnapshot();
+    expect(invalidFailedMarket?.components[0]).toMatchObject({
+      effectiveState: "unknown",
+      heartbeat: null,
+    });
+
+    const duplicateGateway = new RecordingReadGateway(
+      {},
+      {
+        system_components: success([executionComponents[0]!]),
+        system_heartbeats: success([
+          valid,
+          {
+            ...valid,
+            id: "00000000-0000-4000-8000-000000000046",
+          },
+        ]),
+      },
+    );
+    const duplicate = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      duplicateGateway,
+      () => new Date(NOW),
+    ).getHealthSnapshot();
+    expect(duplicate?.components[0]).toMatchObject({
+      effectiveState: "unknown",
+      heartbeat: null,
+    });
+  });
+
+  it("derives unknown from future-dated heartbeat evidence", async () => {
+    const gateway = new RecordingReadGateway(
+      {},
+      {
+        system_components: success([executionComponents[0]!]),
+        system_heartbeats: success([
+          heartbeatRow(COMPONENT_ID, "00000000-0000-4000-8000-000000000043", {
+            observed_at: "2026-08-26T12:00:30.000Z",
+            expires_at: "2026-08-26T12:01:00.000Z",
+          }),
+        ]),
+      },
+    );
+
+    const health = await new OwnerScopedControlPlaneReadAdapter(
+      OWNER_ID,
+      gateway,
+      () => new Date(NOW),
+    ).getHealthSnapshot();
+
+    expect(health?.components[0]).toMatchObject({
+      effectiveState: "unknown",
+      heartbeat: null,
+    });
+  });
+
+  it.each([
+    [15, "2026-08-26T12:00:15.000Z"],
+    [300, "2026-08-26T12:05:00.000Z"],
+  ])(
+    "accepts an exact %i-second heartbeat validity boundary",
+    async (_validitySeconds, expiresAt) => {
+      const gateway = new RecordingReadGateway(
+        {},
+        {
+          system_components: success([executionComponents[0]!]),
+          system_heartbeats: success([
+            heartbeatRow(COMPONENT_ID, "00000000-0000-4000-8000-000000000043", {
+              observed_at: NOW,
+              expires_at: expiresAt,
+            }),
+          ]),
+        },
+      );
+
+      const health = await new OwnerScopedControlPlaneReadAdapter(
+        OWNER_ID,
+        gateway,
+        () => new Date(NOW),
+      ).getHealthSnapshot();
+
+      expect(health?.components[0]).toMatchObject({
+        effectiveState: "healthy",
+        heartbeat: {
+          effectiveState: "healthy",
+          stale: false,
+        },
+      });
+    },
+  );
+
+  it("still fails closed on heartbeat ownership violations", async () => {
+    const gateway = new RecordingReadGateway(
+      {},
+      {
+        system_components: success([executionComponents[0]!]),
+        system_heartbeats: success([
+          heartbeatRow(COMPONENT_ID, "00000000-0000-4000-8000-000000000043", {
+            owner_id: OTHER_OWNER_ID,
+          }),
+        ]),
+      },
+    );
+    const adapter = new OwnerScopedControlPlaneReadAdapter(OWNER_ID, gateway);
+
+    await expect(adapter.getHealthSnapshot()).rejects.toMatchObject({
+      code: "INVALID_READ_DATA",
+      relation: "system_heartbeats",
+    });
   });
 
   it("reads only the safe command-progress projection", async () => {

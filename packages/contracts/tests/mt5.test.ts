@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   DecimalStringSchema,
   Mt5AccountReadModelSchema,
+  Mt5ComponentCodeSchema,
+  Mt5ComponentHeartbeatSchema,
   Mt5HistoryQueryEvidenceSchema,
   Mt5LatestTickReadModelSchema,
   Mt5ReconciliationReadModelSchema,
+  Mt5ReasonCodeSchema,
   Mt5SymbolReadModelSchema,
   PositiveDecimalStringSchema,
   TicketIdentifierSchema,
@@ -29,6 +32,62 @@ const parity = JSON.parse(
 };
 
 describe("MT5 decimal-string and sanitized read contracts", () => {
+  it("restricts component heartbeats to typed codes, states, and reasons", () => {
+    const heartbeat = {
+      componentCode: "execution.market_data",
+      state: "degraded",
+      detail: "TICK_DELAYED",
+      observedAt: "2026-08-28T00:00:00Z",
+      validForSeconds: 30,
+      traceId: "trace-heartbeat",
+    };
+
+    expect(Mt5ComponentHeartbeatSchema.safeParse(heartbeat).success).toBe(true);
+    for (const validForSeconds of [15, 300]) {
+      expect(
+        Mt5ComponentHeartbeatSchema.safeParse({
+          ...heartbeat,
+          validForSeconds,
+        }).success,
+      ).toBe(true);
+    }
+    expect(Mt5ReasonCodeSchema.parse("TICK_DELAYED")).toBe("TICK_DELAYED");
+    expect(
+      Mt5ComponentCodeSchema.safeParse("execution.arbitrary").success,
+    ).toBe(false);
+    for (const invalid of [
+      { ...heartbeat, componentCode: "execution.arbitrary" },
+      { ...heartbeat, state: "unknown" },
+      { ...heartbeat, state: "warning" },
+      { ...heartbeat, detail: "Traceback from a private terminal path" },
+      { ...heartbeat, validForSeconds: 14 },
+      { ...heartbeat, validForSeconds: 30.5 },
+      { ...heartbeat, validForSeconds: 301 },
+      { ...heartbeat, state: "healthy", detail: "TICK_STALE" },
+      { ...heartbeat, state: "failed", detail: "HEALTHY" },
+      { ...heartbeat, detail: "DEMO_ACCOUNT_UNBOUND" },
+      { ...heartbeat, state: "failed", detail: "REAL_ACCOUNT_BLOCKED" },
+    ]) {
+      expect(Mt5ComponentHeartbeatSchema.safeParse(invalid).success).toBe(
+        false,
+      );
+    }
+    for (const detail of [
+      "TICK_INVALID",
+      "TICK_STALE",
+      "TICK_FROM_FUTURE",
+      "TICK_UNAVAILABLE",
+    ]) {
+      expect(
+        Mt5ComponentHeartbeatSchema.safeParse({
+          ...heartbeat,
+          state: "failed",
+          detail,
+        }).success,
+      ).toBe(true);
+    }
+  });
+
   it.each(parity.validDecimalStrings)(
     "accepts exact decimal string %s",
     (value) => {

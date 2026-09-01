@@ -2,7 +2,7 @@
 
 ## Scope
 
-Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. It observes one already-open MetaTrader 5 Demo terminal for canonical `XAUUSD`. The environment remains `DEMO_ONLY`, runtime mode remains `SHADOW`, maximum permitted volume remains `0.01`, maximum open Positions remains one, and a Stop Loss remains mandatory for any future proposal. This milestone contains no strategy, proposal generation, Risk Engine, approval, command consumer, order execution, broker write, or Position mutation. Milestone 3 is not started or authorized.
+Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS** only after the current heartbeat/liveness patch passes final local gates and a new clean-checkout Pull Request run. The local gates passed on 2026-09-02; the new Pull Request run is pending, and the prior source-review CI result does not cover this patch. The Worker observes one already-open MetaTrader 5 Demo terminal for canonical `XAUUSD`. The environment remains `DEMO_ONLY`, runtime mode remains `SHADOW`, maximum permitted volume remains `0.01`, maximum open Positions remains one, and a Stop Loss remains mandatory for any future proposal. This milestone contains no strategy, proposal generation, Risk Engine, approval, command consumer, order execution, broker write, or Position mutation. Milestone 3 is not started or authorized.
 
 The optional native dependency is exactly:
 
@@ -67,6 +67,7 @@ AURUM_MT5_MAX_CLOCK_DRIFT_SECONDS
 AURUM_MT5_CANDLE_LIMIT
 AURUM_MT5_HISTORY_WINDOW_HOURS
 AURUM_MT5_TICK_POLL_SECONDS
+AURUM_MT5_HEARTBEAT_VALID_FOR_SECONDS
 AURUM_MT5_POSITION_POLL_SECONDS
 AURUM_MT5_FULL_RECONCILIATION_SECONDS
 AURUM_MT5_RECONNECT_MAX_SECONDS
@@ -75,7 +76,7 @@ AURUM_MT5_READONLY_SMOKE
 
 `.env.example` contains empty names/defaults only. There is no password variable. Do not put local values in Git, logs, screenshots, prompts, or browser configuration.
 
-The conservative defaults are 5 seconds for lightweight tick polling, 15 seconds for Position/active-Order observation, and 600 seconds for full reconciliation. Tick polling is bounded to 1–30 seconds. The Web read model expires its connected/available liveness projection after 60 seconds without a new bounded tick observation, so every valid tick cadence has room for one missed cycle but cannot remain healthy indefinitely.
+The conservative defaults are 5 seconds for lightweight tick polling, 15 seconds for Position/active-Order observation, and 600 seconds for full reconciliation. Tick polling is bounded to 1–30 seconds. Component-heartbeat TTL defaults to 30 seconds, is bounded to 15–300 seconds, and must be at least three times the configured tick interval; invalid combinations are rejected rather than weakened. The seeded expected heartbeat interval is 15 seconds for all three enabled execution components. The MT5 eligibility read model separately rejects a latest-tick observation older than 60 seconds, so heartbeat liveness never substitutes for current market evidence.
 
 `AURUM_MT5_SMOKE_CONFIRMED_SPECIFICATION_FINGERPRINT` is a local smoke-only operator assertion captured before the run. It can make the smoke compare against an already known fingerprint; it must never be populated from the observation produced by that same run. The deployed database-backed Worker always reads the immutable owner-scoped confirmed binding instead.
 
@@ -103,7 +104,23 @@ Order/deal history is capped at 168 hours, sanitizes comments, excludes sensitiv
 
 ## Polling, health, and reconciliation
 
-The polling service has one cancellable non-daemon thread, bounded exponential reconnect backoff, injected jitter for deterministic tests, and a terminal shutdown barrier. No API call is permitted after shutdown. Three independently typed cadences separate lightweight tick/connection reads, Position plus active-Order observation, and slower full safety reconciliation. Startup and reconnect each require one full reconciliation before health can become healthy. Lightweight polling continues at its bounded cadence while a connected read-capable state is degraded or blocked, preserving current liveness without restoring Healthy. A stable blocked condition does not trigger a full cycle on every short poll; a material account/tick/Position/active-Order change or recovery requires one new full reconciliation. Only full reconciliation performs bounded Order/Deal history queries or creates reconciliation rows; a normal short poll does neither.
+The polling service has one cancellable non-daemon thread, bounded exponential reconnect backoff, injected jitter for deterministic tests, and a terminal shutdown barrier. No API call is permitted after shutdown. Three independently typed cadences separate 5-second tick/connection reads, 15-second Position plus active-Order observation, and 600-second full safety reconciliation by default. Startup and reconnect each require one full reconciliation before health can become Healthy. Lightweight polling continues at its bounded cadence while a connected read-capable state is degraded or blocked, preserving current liveness without restoring Healthy. A stable blocked condition does not trigger a full cycle on every short poll; a material account/tick/Position/active-Order change or recovery requires one new full reconciliation. Only full reconciliation performs bounded Order/Deal history queries or creates reconciliation rows; a normal short poll does neither.
+
+### Component heartbeat ownership
+
+The long-running poller has one central publication path and owns exactly three typed components:
+
+- `execution.worker` (“Aurum Worker”) is authoritative for the read-only Worker. It may be Healthy only when the poller is running, the Terminal is connected, the most recent authoritative full reconciliation is Healthy, `reconciliation_required` is false, and no current fatal Worker failure exists. A Degraded full result remains Degraded; blocked or unavailable maps to Failed.
+- `execution.mt5_adapter` (“การเชื่อมต่อ MT5”) describes only Terminal/API connectivity and account-read safety. Connected calls plus a verified bound Demo account are Healthy. A connected verified Demo account without a binding is Degraded. Disconnected/unavailable Terminal state, Real or Contest account, unknown account mode, binding mismatch, or native access conflict is Failed.
+- `execution.market_data` (“ข้อมูลตลาด XAU/USD”) describes only the current tick. Its exact mapping is `LIVE → healthy/HEALTHY`, `DELAYED → degraded/TICK_DELAYED`, `STALE → failed/TICK_STALE`, `FUTURE_INVALID → failed/TICK_FROM_FUTURE`, and `UNAVAILABLE → failed/TICK_UNAVAILABLE`.
+
+Full reconciliation publishes or renews all three components from the authoritative result. A successful lightweight tick poll renews all three, but preserves or lowers the prior Worker state. A Position/active-Order poll renews Worker and MT5 adapter only; it never marks market data Healthy without a current tick observation. On adapter/poll failure, the poller attempts one bounded Failed report for the affected components and preserves the original safe reason. A database heartbeat-reporting failure is not recursively retried.
+
+### Authoritative health cap
+
+Short polling can renew the expiry of an already-authoritative Healthy Worker or preserve a Degraded/Failed Worker while safe reads continue. It can never promote Degraded or Failed to Healthy. `reconciliation_required` always prevents Worker Healthy, including after a fresh live tick. Position/Order-set changes, material account/tick changes, and recovery from non-live market data set that gate; only a successful full reconciliation clears it.
+
+A component Healthy state is deliberately narrow. Healthy MT5 adapter means that the read-only Terminal/account boundary is functioning; Healthy market data means that the latest tick is live. Neither state implies proposal, strategy, risk, approval, command, execution, or trading eligibility, and neither can clear a blocked reconciliation.
 
 Healthy requires all of the following:
 
@@ -132,15 +149,15 @@ HISTORY_WINDOW_INCOMPLETE
 CLOCK_INCONSISTENCY
 ```
 
-Mismatches and safe incidents block or degrade health. A current Order or Deal history failure/incomplete result prevents healthy state; no stale boolean is reused. Mismatch append and completion serialize on the owner-scoped parent run, completion requires the exact normalized persisted-child and report mismatch sets, and completed runs reject new mismatch evidence. Reconciliation never sends, cancels, modifies, or closes anything and never transitions a command. Latest-tick persistence is a bounded upsert and does not append a security-audit row for routine market telemetry.
+Mismatches and safe incidents block or degrade health. A current Order or Deal history failure/incomplete result prevents healthy state; no stale boolean is reused. Mismatch append and completion serialize on the owner-scoped parent run, completion requires the exact normalized persisted-child and report mismatch sets, and completed runs reject new mismatch evidence. Reconciliation never sends, cancels, modifies, or closes anything and never transitions a command. Latest-tick and component-heartbeat persistence use bounded versioned upserts and do not append a security-audit row for routine telemetry. Important lifecycle incidents and security-sensitive actions retain their existing audit paths.
 
 ## Supabase and Web boundary
 
 Six tables persist sanitized state: `mt5_account_observations`, `mt5_symbol_observations`, `mt5_latest_tick_observations`, `mt5_reconciliation_runs`, `mt5_reconciliation_mismatches`, and `mt5_history_query_evidence`. The existing append-only `broker_symbols` versions hold explicit confirmation metadata. Every application table enables and forces RLS. Authenticated users can read their own rows only. The browser cannot write them, and the Worker cannot perform direct DML.
 
-Seven Worker-only RPCs record/read observation and reconciliation state. They derive owner and Worker identity from claims, validate exact payload keys, use pinned empty search paths, are owned by a NOLOGIN function owner, and reject public/browser execution. The existing reconciliation-completion RPC atomically persists exactly the current Order and Deal evidence; no confirmation RPC was added. Existing bounded heartbeat and incident RPCs are reused. Routine tick telemetry intentionally omits security-audit growth.
+Seven Worker-only RPCs record/read observation and reconciliation state. They derive owner and Worker identity from claims, validate exact payload keys, use pinned empty search paths, are owned by a NOLOGIN function owner, and reject public/browser execution. The existing reconciliation-completion RPC atomically persists exactly the current Order and Deal evidence; no confirmation RPC was added. The existing heartbeat RPC keeps its signature but is replaced in an additive migration so only the three component codes, producer states `healthy`/`degraded`/`failed`, and TTL values 15–300 are accepted. Its owner derivation, stale-write rejection, forced-RLS boundary, revokes, and Worker-only grant remain intact. Routine tick and heartbeat telemetry intentionally omit security-audit growth.
 
-The Web Console uses owner-scoped selects and maps rows through strict Zod contracts. It exposes masked identity, symbol/specification, latest tick, safe health, counts, and reconciliation evidence only. A healthy projection additionally requires a current tick observation, a live tick, a usable symbol, successful Order and Deal evidence, zero mismatches, and exact agreement between the latest account/symbol/tick identifiers and the matched reconciliation. It has no MT5 action buttons.
+The Web Console uses owner-scoped selects and maps rows through strict Zod contracts. It exposes masked identity, symbol/specification, latest tick, safe health, counts, and reconciliation evidence only. A missing, expired, duplicate, or invalid heartbeat becomes derived `unknown`, and invalid producer detail is not exposed. A healthy MT5 eligibility projection additionally requires a current tick observation, a live tick, a usable symbol, successful Order and Deal evidence, zero mismatches, and exact agreement between the latest account/symbol/tick identifiers and the matched reconciliation. Component Healthy alone is insufficient. The console has no MT5 action buttons.
 
 ## Optional real-terminal smoke
 
@@ -175,6 +192,8 @@ The optional official package was installed and imported locally, but no explici
 
 ## Test evidence and limits
 
-The deterministic fake proves account modes, strict connected state, actual XAU/USD validation and alias behavior, immutable confirmation comparison across repeated cycles, decimal/time validation, bucket-based candles, independent Order/Deal evidence, separated polling cadences, persistence failure, health policy, replay, reconnect backoff, cancellation, authoritative smoke exit codes, and no calls after shutdown. Windows CI proves exact package installation/import, positional initialization, static native calls, serialization, safe shutdown paths, and scanner enforcement without needing a Terminal. pgTAP proves clean reset, forced RLS, owner isolation, least privilege, immutable confirmation, exact history evidence, bounded tick upsert without per-tick audit, and idempotent reconciliation.
+The deterministic source regressions cover account modes, strict connected state, actual XAU/USD validation and alias behavior, immutable confirmation comparison across repeated cycles, decimal/time validation, bucket-based candles, independent Order/Deal evidence, separated polling cadences, component allowlists, continuous heartbeat renewal, authoritative Worker caps, `reconciliation_required`, all five market-data mappings, persistence failure, reconnect backoff, cancellation, authoritative smoke exit codes, and no calls after shutdown. Web source regressions cover renewed-versus-expired heartbeats, missing/invalid evidence, blocked Worker state, delayed market data, Thai labels, and sensitive-field exclusion. Database source plans cover 400 assertions across nine pgTAP suites, including bounded repeated tick/heartbeat upserts, no routine audit growth, forced RLS, owner isolation, and least privilege.
+
+The final local run passed format, lint, TypeScript/Python type-check, 88 TypeScript tests, 233 Worker tests, production builds, security scans, dependency checks, two clean database resets, lint, 400 pgTAP assertions, four concurrent-claim assertions, and generated-type freshness. The new Pull Request `quality`, `database`, and `windows-mt5-boundary` conclusions remain pending for the heartbeat/liveness patch. The previous green CI run covered the earlier source-review HEAD only. Windows CI, once rerun, still proves the package/native boundary without a Terminal; it does not replace the real-terminal smoke, which remains `NOT RUN`.
 
 The fake does not prove a particular broker terminal, symbol naming convention, local installation, network availability, or hosted deployment. Those remain explicit operator/environment limitations. Milestone 3 is not started.

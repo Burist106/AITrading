@@ -18,11 +18,14 @@ from aurum_worker.models.mt5 import (
     CandleObservation,
     CandleRequest,
     CandleSeries,
+    ComponentHeartbeat,
+    ComponentHeartbeatState,
     HealthState,
     HistoryQueryEvidence,
     HistoryQueryResultState,
     HistoryRequest,
     LatestTickObservation,
+    Mt5ComponentCode,
     Mt5ReasonCode,
     Mt5WorkerConfig,
     ReconciliationCategory,
@@ -68,6 +71,7 @@ def test_configuration_reads_only_local_readonly_settings() -> None:
             "AURUM_MT5_CANDLE_LIMIT": "200",
             "AURUM_MT5_HISTORY_WINDOW_HOURS": "12",
             "AURUM_MT5_TICK_POLL_SECONDS": "2.5",
+            "AURUM_MT5_HEARTBEAT_VALID_FOR_SECONDS": "30",
             "AURUM_MT5_POSITION_POLL_SECONDS": "20",
             "AURUM_MT5_FULL_RECONCILIATION_SECONDS": "600",
             "AURUM_MT5_RECONNECT_MAX_SECONDS": "30",
@@ -76,6 +80,7 @@ def test_configuration_reads_only_local_readonly_settings() -> None:
     )
     assert config.terminal_path == Path("C:/MT5/terminal64.exe")
     assert config.tick_poll_seconds == Decimal("2.5")
+    assert config.heartbeat_valid_for_seconds == 30
     assert config.position_poll_seconds == Decimal("20")
     assert config.full_reconciliation_seconds == Decimal("600")
     assert config.smoke_confirmed_specification_fingerprint == "mt5-spec-v1:test"
@@ -85,21 +90,222 @@ def test_configuration_reads_only_local_readonly_settings() -> None:
     defaults = Mt5WorkerConfig.from_environ(
         {
             "AURUM_MT5_TICK_POLL_SECONDS": "",
+            "AURUM_MT5_HEARTBEAT_VALID_FOR_SECONDS": "",
             "AURUM_MT5_POSITION_POLL_SECONDS": "",
             "AURUM_MT5_FULL_RECONCILIATION_SECONDS": "",
         }
     )
     assert defaults.tick_poll_seconds == Decimal("5")
+    assert defaults.heartbeat_valid_for_seconds == 30
     assert defaults.position_poll_seconds == Decimal("15")
     assert defaults.full_reconciliation_seconds == Decimal("600")
 
 
 def test_tick_poll_cadence_is_bounded_below_web_liveness_expiry() -> None:
     assert Mt5WorkerConfig(
-        tick_poll_seconds=Decimal("30")
+        tick_poll_seconds=Decimal("30"), heartbeat_valid_for_seconds=90
     ).tick_poll_seconds == Decimal("30")
     with pytest.raises(ValidationError):
         Mt5WorkerConfig(tick_poll_seconds=Decimal("30.001"))
+
+
+def test_heartbeat_ttl_is_bounded_and_covers_three_tick_intervals() -> None:
+    assert (
+        Mt5WorkerConfig(
+            tick_poll_seconds=Decimal("5"), heartbeat_valid_for_seconds=15
+        ).heartbeat_valid_for_seconds
+        == 15
+    )
+    assert (
+        Mt5WorkerConfig(
+            tick_poll_seconds=Decimal("10.1"), heartbeat_valid_for_seconds=31
+        ).heartbeat_valid_for_seconds
+        == 31
+    )
+
+    for tick_seconds, ttl_seconds in (
+        (Decimal("10"), 29),
+        (Decimal("5"), 14),
+        (Decimal("5"), 0),
+        (Decimal("5"), -1),
+        (Decimal("5"), 301),
+    ):
+        with pytest.raises(ValidationError):
+            Mt5WorkerConfig(
+                tick_poll_seconds=tick_seconds,
+                heartbeat_valid_for_seconds=ttl_seconds,
+            )
+
+
+def test_component_heartbeat_is_typed_and_rejects_unknown_producer_values() -> None:
+    heartbeat = ComponentHeartbeat(
+        component_code=Mt5ComponentCode.MARKET_DATA,
+        state=ComponentHeartbeatState.DEGRADED,
+        detail=Mt5ReasonCode.TICK_DELAYED,
+        observed_at=NOW,
+        valid_for_seconds=30,
+        trace_id="heartbeat-model",
+    )
+
+    assert {component.value for component in Mt5ComponentCode} == {
+        "execution.worker",
+        "execution.mt5_adapter",
+        "execution.market_data",
+    }
+    assert {state.value for state in ComponentHeartbeatState} == {
+        "healthy",
+        "degraded",
+        "failed",
+    }
+    assert heartbeat.detail is Mt5ReasonCode.TICK_DELAYED
+
+    payload = heartbeat.model_dump(mode="python")
+    payload["component_code"] = "execution.arbitrary"
+    with pytest.raises(ValidationError):
+        ComponentHeartbeat.model_validate(payload)
+
+    payload = heartbeat.model_dump(mode="python")
+    payload["state"] = "unknown"
+    with pytest.raises(ValidationError):
+        ComponentHeartbeat.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("component", "state", "detail", "ttl"),
+    [
+        (
+            Mt5ComponentCode.WORKER,
+            ComponentHeartbeatState.HEALTHY,
+            Mt5ReasonCode.HEALTHY,
+            15,
+        ),
+        (
+            Mt5ComponentCode.MT5_ADAPTER,
+            ComponentHeartbeatState.FAILED,
+            Mt5ReasonCode.TERMINAL_DISCONNECTED,
+            300,
+        ),
+        (
+            Mt5ComponentCode.MARKET_DATA,
+            ComponentHeartbeatState.DEGRADED,
+            Mt5ReasonCode.TICK_DELAYED,
+            30,
+        ),
+        (
+            Mt5ComponentCode.WORKER,
+            ComponentHeartbeatState.DEGRADED,
+            Mt5ReasonCode.DEMO_ACCOUNT_UNBOUND,
+            30,
+        ),
+    ],
+)
+def test_component_heartbeat_accepts_cross_layer_state_detail_pairs(
+    component: Mt5ComponentCode,
+    state: ComponentHeartbeatState,
+    detail: Mt5ReasonCode,
+    ttl: int,
+) -> None:
+    heartbeat = ComponentHeartbeat(
+        component_code=component,
+        state=state,
+        detail=detail,
+        observed_at=NOW,
+        valid_for_seconds=ttl,
+        trace_id="heartbeat-valid-pair",
+    )
+
+    assert heartbeat.valid_for_seconds == ttl
+
+
+@pytest.mark.parametrize(
+    ("component", "state", "detail"),
+    [
+        (
+            Mt5ComponentCode.WORKER,
+            ComponentHeartbeatState.HEALTHY,
+            Mt5ReasonCode.RECONCILIATION_INCOMPLETE,
+        ),
+        (
+            Mt5ComponentCode.WORKER,
+            ComponentHeartbeatState.FAILED,
+            Mt5ReasonCode.HEALTHY,
+        ),
+        (
+            Mt5ComponentCode.MT5_ADAPTER,
+            ComponentHeartbeatState.DEGRADED,
+            Mt5ReasonCode.HEALTHY,
+        ),
+        (
+            Mt5ComponentCode.MARKET_DATA,
+            ComponentHeartbeatState.DEGRADED,
+            Mt5ReasonCode.DEMO_ACCOUNT_UNBOUND,
+        ),
+    ],
+)
+def test_component_heartbeat_rejects_cross_layer_state_detail_contradictions(
+    component: Mt5ComponentCode,
+    state: ComponentHeartbeatState,
+    detail: Mt5ReasonCode,
+) -> None:
+    with pytest.raises(ValidationError):
+        ComponentHeartbeat(
+            component_code=component,
+            state=state,
+            detail=detail,
+            observed_at=NOW,
+            valid_for_seconds=30,
+            trace_id="heartbeat-invalid-pair",
+        )
+
+
+@pytest.mark.parametrize(
+    ("state", "detail"),
+    [
+        (ComponentHeartbeatState.HEALTHY, Mt5ReasonCode.HEALTHY),
+        (ComponentHeartbeatState.DEGRADED, Mt5ReasonCode.TICK_DELAYED),
+        (ComponentHeartbeatState.FAILED, Mt5ReasonCode.TICK_INVALID),
+        (ComponentHeartbeatState.FAILED, Mt5ReasonCode.TICK_STALE),
+        (ComponentHeartbeatState.FAILED, Mt5ReasonCode.TICK_FROM_FUTURE),
+        (ComponentHeartbeatState.FAILED, Mt5ReasonCode.TICK_UNAVAILABLE),
+    ],
+)
+def test_market_heartbeat_accepts_only_freshness_state_detail_pairs(
+    state: ComponentHeartbeatState,
+    detail: Mt5ReasonCode,
+) -> None:
+    heartbeat = ComponentHeartbeat(
+        component_code=Mt5ComponentCode.MARKET_DATA,
+        state=state,
+        detail=detail,
+        observed_at=NOW,
+        valid_for_seconds=30,
+        trace_id="market-heartbeat-valid-pair",
+    )
+
+    assert heartbeat.detail is detail
+
+
+@pytest.mark.parametrize(
+    ("state", "detail"),
+    [
+        (ComponentHeartbeatState.FAILED, Mt5ReasonCode.REAL_ACCOUNT_BLOCKED),
+        (ComponentHeartbeatState.FAILED, Mt5ReasonCode.TICK_DELAYED),
+        (ComponentHeartbeatState.DEGRADED, Mt5ReasonCode.TICK_STALE),
+    ],
+)
+def test_market_heartbeat_rejects_non_freshness_state_detail_pairs(
+    state: ComponentHeartbeatState,
+    detail: Mt5ReasonCode,
+) -> None:
+    with pytest.raises(ValidationError):
+        ComponentHeartbeat(
+            component_code=Mt5ComponentCode.MARKET_DATA,
+            state=state,
+            detail=detail,
+            observed_at=NOW,
+            valid_for_seconds=30,
+            trace_id="market-heartbeat-invalid-pair",
+        )
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), "-1", "0"])
