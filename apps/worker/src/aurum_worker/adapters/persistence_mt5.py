@@ -12,10 +12,11 @@ from aurum_worker.models.mt5 import (
     AccountObservation,
     AccountVerificationState,
     BrokerSymbolObservation,
+    ComponentHeartbeat,
     ConfirmedSymbolBinding,
     DatabaseReconciliationState,
     LatestTickObservation,
-    Mt5HealthSnapshot,
+    Mt5ComponentCode,
     Mt5ReadFailure,
     Mt5ReasonCode,
     ReconciliationMismatch,
@@ -42,7 +43,7 @@ class InMemoryMt5ObservationPersistence(Mt5ObservationPersistencePort):
     ticks: dict[str, LatestTickObservation] = field(default_factory=dict)
     reports: dict[str, ReconciliationReport] = field(default_factory=dict)
     mismatches: list[tuple[str, ReconciliationMismatch]] = field(default_factory=list)
-    heartbeats: list[Mt5HealthSnapshot] = field(default_factory=list)
+    heartbeats: dict[Mt5ComponentCode, ComponentHeartbeat] = field(default_factory=dict)
     incidents: list[tuple[str, str, str, str, str, datetime]] = field(
         default_factory=list
     )
@@ -120,9 +121,9 @@ class InMemoryMt5ObservationPersistence(Mt5ObservationPersistencePort):
         self.reports[report.reconciliation_id] = report
         return result
 
-    def record_heartbeat(self, snapshot: Mt5HealthSnapshot) -> str:
-        result = self._result("record_heartbeat")
-        self.heartbeats.append(snapshot)
+    def record_component_heartbeat(self, heartbeat: ComponentHeartbeat) -> str:
+        result = self._result("record_component_heartbeat")
+        self.heartbeats[heartbeat.component_code] = heartbeat
         return result
 
     def record_incident(
@@ -153,11 +154,27 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
     _RECONCILIATION_COMPLETE_CODES = frozenset(
         {"RECONCILIATION_COMPLETED", "IDEMPOTENT_REPLAY"}
     )
-    _HEARTBEAT_CODES = frozenset({"HEARTBEAT_RECORDED"})
+    _HEARTBEAT_CODES = frozenset({"HEARTBEAT_RECORDED", "STALE_HEARTBEAT"})
     _INCIDENT_CODES = frozenset({"CREATED", "IDEMPOTENT_REPLAY"})
 
     def __init__(self, client: WorkerRpcClient) -> None:
         self._client = client
+
+    def _safe_transport_call(
+        self, function: str, parameters: dict[str, object]
+    ) -> dict[str, object]:
+        try:
+            return self._client.call(function, parameters)
+        except Mt5ReadFailure:
+            raise
+        except Exception:
+            raise Mt5ReadFailure(
+                SafeMt5Error(
+                    reason_code=Mt5ReasonCode.DATABASE_REPORT_FAILED,
+                    safe_detail="Worker persistence transport is unavailable.",
+                    retryable=True,
+                )
+            ) from None
 
     @staticmethod
     def _code(response: dict[str, object], accepted_codes: frozenset[str]) -> str:
@@ -330,20 +347,16 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
             self._RECONCILIATION_COMPLETE_CODES,
         )
 
-    def record_heartbeat(self, snapshot: Mt5HealthSnapshot) -> str:
+    def record_component_heartbeat(self, heartbeat: ComponentHeartbeat) -> str:
         return self._code(
-            self._client.call(
+            self._safe_transport_call(
                 "worker_record_heartbeat",
                 {
-                    "component_code": "execution.worker",
-                    "state": (
-                        "failed"
-                        if snapshot.state.value in {"blocked", "unavailable"}
-                        else snapshot.state.value
-                    ),
-                    "detail": snapshot.reason_code.value,
-                    "observed_at": snapshot.observed_at.isoformat(),
-                    "valid_for_seconds": 30,
+                    "component_code": heartbeat.component_code.value,
+                    "state": heartbeat.state.value,
+                    "detail": heartbeat.detail.value,
+                    "observed_at": heartbeat.observed_at.isoformat(),
+                    "valid_for_seconds": heartbeat.valid_for_seconds,
                 },
             ),
             self._HEARTBEAT_CODES,
@@ -360,7 +373,7 @@ class WorkerRpcMt5ObservationPersistence(Mt5ObservationPersistencePort):
     ) -> str:
         request_id = str(uuid5(NAMESPACE_URL, f"aurum:{trace_id}:{code}:{detail}"))
         return self._code(
-            self._client.call(
+            self._safe_transport_call(
                 "worker_record_incident",
                 {
                     "code": code,

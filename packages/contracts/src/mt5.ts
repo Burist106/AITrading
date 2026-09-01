@@ -40,6 +40,115 @@ export const MT5_HEALTH_STATES = [
 ] as const;
 export const Mt5HealthStateSchema = z.enum(MT5_HEALTH_STATES);
 
+export const MT5_COMPONENT_CODES = [
+  "execution.worker",
+  "execution.mt5_adapter",
+  "execution.market_data",
+] as const;
+export const Mt5ComponentCodeSchema = z.enum(MT5_COMPONENT_CODES);
+
+export const MT5_COMPONENT_HEARTBEAT_STATES = [
+  "healthy",
+  "degraded",
+  "failed",
+] as const;
+export const Mt5ComponentHeartbeatStateSchema = z.enum(
+  MT5_COMPONENT_HEARTBEAT_STATES,
+);
+
+export const MT5_REASON_CODES = [
+  "HEALTHY",
+  "MT5_PACKAGE_NOT_INSTALLED",
+  "UNSUPPORTED_PLATFORM",
+  "TERMINAL_PATH_NOT_CONFIGURED",
+  "TERMINAL_NOT_FOUND",
+  "INITIALIZE_FAILED",
+  "TERMINAL_INFO_UNAVAILABLE",
+  "TERMINAL_DISCONNECTED",
+  "ACCOUNT_INFO_UNAVAILABLE",
+  "TRADE_MODE_UNKNOWN",
+  "CONTEST_ACCOUNT_BLOCKED",
+  "REAL_ACCOUNT_BLOCKED",
+  "ACCOUNT_BINDING_MISMATCH",
+  "DEMO_ACCOUNT_UNBOUND",
+  "SYMBOL_NOT_CONFIGURED",
+  "SYMBOL_NOT_FOUND",
+  "SYMBOL_AMBIGUOUS",
+  "SYMBOL_NOT_VISIBLE",
+  "SYMBOL_CANONICAL_MISMATCH",
+  "SYMBOL_SPEC_INCOMPLETE",
+  "SYMBOL_SPEC_CONFIRMATION_REQUIRED",
+  "SYMBOL_SPEC_CHANGED",
+  "TICK_UNAVAILABLE",
+  "TICK_INVALID",
+  "TICK_DELAYED",
+  "TICK_STALE",
+  "TICK_FROM_FUTURE",
+  "CLOCK_DRIFT_EXCEEDED",
+  "CANDLE_DATA_INVALID",
+  "CANDLE_DATA_STALE",
+  "HISTORY_EMPTY_VALID_RESULT",
+  "HISTORY_QUERY_FAILED",
+  "HISTORY_WINDOW_INCOMPLETE",
+  "RECONCILIATION_INCOMPLETE",
+  "DATABASE_REPORT_FAILED",
+  "NATIVE_ACCESS_CONFLICT",
+] as const;
+export const Mt5ReasonCodeSchema = z.enum(MT5_REASON_CODES);
+
+export const MT5_CONSOLE_DERIVED_REASON_CODES = [
+  "MT5_OBSERVATION_UNAVAILABLE",
+  "ACCOUNT_VERIFICATION_BLOCKED",
+  "MT5_OBSERVATION_STALE",
+  "RECONCILIATION_REQUIRED",
+  "RECONCILIATION_PENDING",
+  "SYMBOL_OBSERVATION_UNAVAILABLE",
+  "SYMBOL_UNUSABLE",
+  "RECONCILIATION_OBSERVATION_MISMATCH",
+  "RECONCILIATION_EVIDENCE_INCOMPLETE",
+] as const;
+export const Mt5ConsoleReasonCodeSchema = z.enum([
+  ...MT5_REASON_CODES,
+  ...MT5_CONSOLE_DERIVED_REASON_CODES,
+]);
+
+export const Mt5ComponentHeartbeatSchema = z
+  .strictObject({
+    componentCode: Mt5ComponentCodeSchema,
+    state: Mt5ComponentHeartbeatStateSchema,
+    detail: Mt5ReasonCodeSchema,
+    observedAt: IsoDateTimeSchema,
+    validForSeconds: z.number().int().min(15).max(300),
+    traceId: IdentifierSchema,
+  })
+  .superRefine((value, context) => {
+    if ((value.state === "healthy") !== (value.detail === "HEALTHY")) {
+      context.addIssue({
+        code: "custom",
+        path: ["detail"],
+        message:
+          "Healthy component state and HEALTHY detail must be reported together.",
+      });
+    }
+    if (
+      value.componentCode === "execution.market_data" &&
+      ((value.state === "degraded" && value.detail !== "TICK_DELAYED") ||
+        (value.state === "failed" &&
+          ![
+            "TICK_INVALID",
+            "TICK_STALE",
+            "TICK_FROM_FUTURE",
+            "TICK_UNAVAILABLE",
+          ].includes(value.detail)))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["detail"],
+        message: "Market-data state requires an exact tick-freshness detail.",
+      });
+    }
+  });
+
 export const MT5_TICK_FRESHNESS_STATES = [
   "live",
   "delayed",
@@ -100,7 +209,7 @@ export const Mt5SymbolReadModelSchema = ObservationMetadataSchema.extend({
   currencyProfit: z.literal("USD"),
   specificationFingerprint: Mt5SpecificationFingerprintSchema,
   usabilityState: z.enum(["usable", "not_visible", "incomplete", "invalid"]),
-  unusableReason: IdentifierSchema.nullable(),
+  unusableReason: Mt5ReasonCodeSchema.nullable(),
   point: PositiveDecimalStringSchema,
   tickSize: PositiveDecimalStringSchema,
   contractSize: PositiveDecimalStringSchema,
@@ -125,7 +234,7 @@ export const Mt5ReconciliationMismatchSchema = z.strictObject({
   severity: z.enum(["warning", "critical"]),
   resourceType: IdentifierSchema,
   resourceReference: IdentifierSchema,
-  reasonCode: IdentifierSchema.nullable(),
+  reasonCode: Mt5ReasonCodeSchema.nullable(),
 });
 
 export const MT5_HISTORY_QUERY_KINDS = ["orders", "deals"] as const;
@@ -152,7 +261,7 @@ export const Mt5HistoryQueryEvidenceSchema = z
     earliestReturnedAt: IsoDateTimeSchema.nullable(),
     latestReturnedAt: IsoDateTimeSchema.nullable(),
     resultState: Mt5HistoryQueryResultStateSchema,
-    reasonCode: IdentifierSchema,
+    reasonCode: Mt5ReasonCodeSchema,
   })
   .superRefine((value, context) => {
     const issue = (message: string): void => {
@@ -244,7 +353,7 @@ export const Mt5ReconciliationReadModelSchema = z
     traceId: IdentifierSchema,
     status: z.enum(["running", "completed"]),
     outcome: Mt5ReconciliationOutcomeSchema.nullable(),
-    reasonCode: IdentifierSchema,
+    reasonCode: Mt5ReasonCodeSchema,
     startedAt: IsoDateTimeSchema,
     completedAt: IsoDateTimeSchema.nullable(),
     openPositionCount: z.number().int().nonnegative(),
@@ -338,7 +447,7 @@ export const Mt5ReconciliationReadModelSchema = z
 
 export const Mt5HealthReadModelSchema = ObservationMetadataSchema.extend({
   state: Mt5HealthStateSchema,
-  reasonCode: IdentifierSchema,
+  reasonCode: Mt5ConsoleReasonCodeSchema,
   packageAvailable: z.boolean(),
   platform: IdentifierSchema,
   terminalConnected: z.boolean(),
@@ -365,6 +474,13 @@ export const Mt5ConsoleReadModelSchema = z.strictObject({
 });
 
 export type DecimalString = z.infer<typeof DecimalStringSchema>;
+export type Mt5ComponentCode = z.infer<typeof Mt5ComponentCodeSchema>;
+export type Mt5ComponentHeartbeatState = z.infer<
+  typeof Mt5ComponentHeartbeatStateSchema
+>;
+export type Mt5ReasonCode = z.infer<typeof Mt5ReasonCodeSchema>;
+export type Mt5ConsoleReasonCode = z.infer<typeof Mt5ConsoleReasonCodeSchema>;
+export type Mt5ComponentHeartbeat = z.infer<typeof Mt5ComponentHeartbeatSchema>;
 export type Mt5AccountReadModel = z.infer<typeof Mt5AccountReadModelSchema>;
 export type Mt5SymbolReadModel = z.infer<typeof Mt5SymbolReadModelSchema>;
 export type Mt5LatestTickReadModel = z.infer<

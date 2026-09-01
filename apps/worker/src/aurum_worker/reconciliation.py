@@ -303,7 +303,6 @@ class ReadOnlyReconciliationService:
                 masked_server=account.masked_server,
                 reconciliation_outcome=report.outcome,
             )
-            self._persistence.record_heartbeat(health)
             return ReconciliationResult(report=report, health=health)
 
         binding = database.confirmed_symbol_binding
@@ -342,7 +341,6 @@ class ReadOnlyReconciliationService:
                 masked_server=account.masked_server,
                 reconciliation_outcome=report.outcome,
             )
-            self._persistence.record_heartbeat(health)
             return ReconciliationResult(report=report, health=health)
 
         broker_symbol = self._config.broker_symbol or (
@@ -375,7 +373,6 @@ class ReadOnlyReconciliationService:
                 masked_server=account.masked_server,
                 reconciliation_outcome=report.outcome,
             )
-            self._persistence.record_heartbeat(health)
             return ReconciliationResult(report=report, health=health)
 
         specification = self._adapter.get_symbol_specification(
@@ -455,9 +452,12 @@ class ReadOnlyReconciliationService:
         elif tick.freshness is TickFreshness.FUTURE_INVALID:
             health_state = HealthState.BLOCKED
             health_reason = Mt5ReasonCode.TICK_FROM_FUTURE
-        elif tick.freshness is not TickFreshness.LIVE:
+        elif tick.freshness is TickFreshness.UNAVAILABLE:
+            health_state = HealthState.BLOCKED
+            health_reason = Mt5ReasonCode.TICK_UNAVAILABLE
+        elif tick.freshness is TickFreshness.DELAYED:
             health_state = HealthState.DEGRADED
-            health_reason = Mt5ReasonCode.TICK_STALE
+            health_reason = Mt5ReasonCode.TICK_DELAYED
         elif verification.state is AccountVerificationState.VERIFIED_DEMO_UNBOUND:
             health_state = HealthState.DEGRADED
             health_reason = Mt5ReasonCode.DEMO_ACCOUNT_UNBOUND
@@ -478,7 +478,6 @@ class ReadOnlyReconciliationService:
             positions=len(positions),
             orders=len(orders),
         )
-        self._persistence.record_heartbeat(health)
         return ReconciliationResult(
             report=report,
             health=health,

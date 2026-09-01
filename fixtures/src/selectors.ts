@@ -460,45 +460,67 @@ export function buildSystemHealth(
   const scenario = getScenario(scenarioId);
   const observedAt = timestamp;
   const failedAccount = scenario.accountVerification === "blocked_non_demo";
+  const terminalConnected = scenario.mt5State === "connected";
+  const marketState = !terminalConnected
+    ? "failed"
+    : scenario.marketFreshness === "delayed"
+      ? "degraded"
+      : scenario.marketFreshness === "live"
+        ? "healthy"
+        : "failed";
+  const marketDetail = !terminalConnected
+    ? "ข้อมูลตลาดไม่พร้อม · TICK_UNAVAILABLE"
+    : scenario.marketFreshness === "delayed"
+      ? "ข้อมูลตลาดล่าช้า · TICK_DELAYED"
+      : scenario.marketFreshness === "live"
+        ? "Tick XAU/USD สด · HEALTHY"
+        : scenario.marketFreshness === "stale"
+          ? "ข้อมูลตลาดหมดอายุ · TICK_STALE"
+          : "ข้อมูลตลาดไม่พร้อม · TICK_UNAVAILABLE";
+  const workerState =
+    failedAccount || !terminalConnected || marketState === "failed"
+      ? "failed"
+      : marketState === "degraded"
+        ? "degraded"
+        : "healthy";
+  const workerDetail = failedAccount
+    ? "บล็อกบัญชีที่ไม่ใช่ Demo · REAL_ACCOUNT_BLOCKED"
+    : !terminalConnected
+      ? "การเชื่อมต่อ MT5 ขาดหาย · TERMINAL_DISCONNECTED"
+      : marketState === "degraded"
+        ? "คงสถานะลดระดับจากรอบเต็ม · TICK_DELAYED"
+        : marketState === "failed"
+          ? marketDetail
+          : "สถานะรอบเต็มล่าสุดปลอดภัย · HEALTHY";
   return SystemHealthSnapshotSchema.parse({
     capturedAt: observedAt,
     components: [
       {
-        code: "worker.bootstrap",
-        labelTh: "Worker Bootstrap",
+        code: "execution.worker",
+        labelTh: "Aurum Worker",
         plane: "execution_plane",
-        state: failedAccount
-          ? "failed"
-          : scenario.mt5State === "disconnected"
-            ? "failed"
-            : "healthy",
+        state: workerState,
+        detail: workerDetail,
+        observedAt,
+      },
+      {
+        code: "execution.mt5_adapter",
+        labelTh: "การเชื่อมต่อ MT5",
+        plane: "execution_plane",
+        state: failedAccount || !terminalConnected ? "failed" : "healthy",
         detail: failedAccount
-          ? "บล็อกบัญชีที่ไม่ใช่ Demo"
-          : "โครงจำลองพร้อมทำงานแบบอ่านอย่างเดียว",
+          ? "บัญชีที่ไม่ใช่ Demo ถูกบล็อก · REAL_ACCOUNT_BLOCKED"
+          : terminalConnected
+            ? "ขอบเขต MT5 แบบอ่านอย่างเดียวพร้อม · HEALTHY"
+            : "Terminal ขาดการเชื่อมต่อ · TERMINAL_DISCONNECTED",
         observedAt,
       },
       {
-        code: "mt5.adapter",
-        labelTh: "MT5 Adapter",
+        code: "execution.market_data",
+        labelTh: "ข้อมูลตลาด XAU/USD",
         plane: "execution_plane",
-        state: scenario.mt5State === "connected" ? "healthy" : "failed",
-        detail:
-          scenario.mt5State === "connected"
-            ? "Fake adapter · ไม่มี MT5 runtime"
-            : "สถานะจำลอง: ขาดการเชื่อมต่อ",
-        observedAt,
-      },
-      {
-        code: "market.fixture",
-        labelTh: "ข้อมูลตลาดจำลอง",
-        plane: "execution_plane",
-        state:
-          scenario.marketFreshness === "stale"
-            ? "failed"
-            : scenario.marketFreshness === "delayed"
-              ? "warning"
-              : "healthy",
-        detail: `fixture/${scenario.marketFreshness}`,
+        state: marketState,
+        detail: marketDetail,
         observedAt,
       },
       {

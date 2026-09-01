@@ -48,7 +48,9 @@ _BLOCKED_REASON_VALUES = frozenset(
         "SYMBOL_SPEC_CONFIRMATION_REQUIRED",
         "SYMBOL_SPEC_INCOMPLETE",
         "TICK_FROM_FUTURE",
+        "TICK_DELAYED",
         "TICK_STALE",
+        "TICK_UNAVAILABLE",
         "TRADE_MODE_UNKNOWN",
     }
 )
@@ -157,11 +159,12 @@ def _smoke(config: Mt5WorkerConfig) -> int:
             config.broker_symbol, trace_id="local-readonly-smoke"
         )
         if tick.freshness is not TickFreshness.LIVE:
-            reason = (
-                Mt5ReasonCode.TICK_FROM_FUTURE
-                if tick.freshness is TickFreshness.FUTURE_INVALID
-                else Mt5ReasonCode.TICK_STALE
-            )
+            reason = {
+                TickFreshness.DELAYED: Mt5ReasonCode.TICK_DELAYED,
+                TickFreshness.STALE: Mt5ReasonCode.TICK_STALE,
+                TickFreshness.FUTURE_INVALID: Mt5ReasonCode.TICK_FROM_FUTURE,
+                TickFreshness.UNAVAILABLE: Mt5ReasonCode.TICK_UNAVAILABLE,
+            }[tick.freshness]
             raise _failure(reason, "Latest tick is not acceptable for the smoke test.")
         candles = adapter.get_candles(
             config.broker_symbol,

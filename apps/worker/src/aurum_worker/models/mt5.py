@@ -79,6 +79,18 @@ class HealthState(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class Mt5ComponentCode(StrEnum):
+    WORKER = "execution.worker"
+    MT5_ADAPTER = "execution.mt5_adapter"
+    MARKET_DATA = "execution.market_data"
+
+
+class ComponentHeartbeatState(StrEnum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    FAILED = "failed"
+
+
 class Mt5ReasonCode(StrEnum):
     HEALTHY = "HEALTHY"
     MT5_PACKAGE_NOT_INSTALLED = "MT5_PACKAGE_NOT_INSTALLED"
@@ -104,6 +116,7 @@ class Mt5ReasonCode(StrEnum):
     SYMBOL_SPEC_CHANGED = "SYMBOL_SPEC_CHANGED"
     TICK_UNAVAILABLE = "TICK_UNAVAILABLE"
     TICK_INVALID = "TICK_INVALID"
+    TICK_DELAYED = "TICK_DELAYED"
     TICK_STALE = "TICK_STALE"
     TICK_FROM_FUTURE = "TICK_FROM_FUTURE"
     CLOCK_DRIFT_EXCEEDED = "CLOCK_DRIFT_EXCEEDED"
@@ -123,6 +136,47 @@ class TickFreshness(StrEnum):
     STALE = "stale"
     FUTURE_INVALID = "future_invalid"
     UNAVAILABLE = "unavailable"
+
+
+_MARKET_DATA_FAILURE_DETAILS = frozenset(
+    {
+        Mt5ReasonCode.TICK_INVALID,
+        Mt5ReasonCode.TICK_STALE,
+        Mt5ReasonCode.TICK_FROM_FUTURE,
+        Mt5ReasonCode.TICK_UNAVAILABLE,
+    }
+)
+
+
+class ComponentHeartbeat(Mt5Model):
+    component_code: Mt5ComponentCode
+    state: ComponentHeartbeatState
+    detail: Mt5ReasonCode
+    observed_at: AwareDatetime
+    valid_for_seconds: Annotated[int, Field(ge=15, le=300)]
+    trace_id: SafeIdentifier
+
+    @model_validator(mode="after")
+    def validate_state_detail_pair(self) -> Self:
+        if (self.state is ComponentHeartbeatState.HEALTHY) is not (
+            self.detail is Mt5ReasonCode.HEALTHY
+        ):
+            raise ValueError(
+                "Healthy component state and HEALTHY detail must be reported together."
+            )
+        if (
+            self.component_code is Mt5ComponentCode.MARKET_DATA
+            and self.state is ComponentHeartbeatState.DEGRADED
+            and self.detail is not Mt5ReasonCode.TICK_DELAYED
+        ):
+            raise ValueError("Degraded market data requires TICK_DELAYED detail.")
+        if (
+            self.component_code is Mt5ComponentCode.MARKET_DATA
+            and self.state is ComponentHeartbeatState.FAILED
+            and self.detail not in _MARKET_DATA_FAILURE_DETAILS
+        ):
+            raise ValueError("Failed market data requires a tick failure detail.")
+        return self
 
 
 class Timeframe(StrEnum):
@@ -195,6 +249,7 @@ class Mt5WorkerConfig(Mt5Model):
     tick_poll_seconds: Annotated[Decimal, Field(ge=Decimal("1"), le=Decimal("30"))] = (
         Decimal("5")
     )
+    heartbeat_valid_for_seconds: Annotated[int, Field(ge=15, le=300)] = 30
     position_poll_seconds: Annotated[
         Decimal, Field(ge=Decimal("5"), le=Decimal("300"))
     ] = Decimal("15")
@@ -205,6 +260,15 @@ class Mt5WorkerConfig(Mt5Model):
         Decimal, Field(ge=Decimal("1"), le=Decimal("300"))
     ] = Decimal("60")
     readonly_smoke: bool = False
+
+    @model_validator(mode="after")
+    def validate_heartbeat_cadence(self) -> Self:
+        minimum_ttl = self.tick_poll_seconds * Decimal(3)
+        if Decimal(self.heartbeat_valid_for_seconds) < minimum_ttl:
+            raise ValueError(
+                "heartbeat TTL must be at least three tick polling intervals"
+            )
+        return self
 
     @classmethod
     def from_environ(cls, environ: dict[str, str] | None = None) -> Self:
@@ -232,6 +296,9 @@ class Mt5WorkerConfig(Mt5Model):
                 values.get("AURUM_MT5_HISTORY_WINDOW_HOURS", "24")
             ),
             tick_poll_seconds=Decimal(values.get("AURUM_MT5_TICK_POLL_SECONDS") or "5"),
+            heartbeat_valid_for_seconds=int(
+                values.get("AURUM_MT5_HEARTBEAT_VALID_FOR_SECONDS") or "30"
+            ),
             position_poll_seconds=Decimal(
                 values.get("AURUM_MT5_POSITION_POLL_SECONDS") or "15"
             ),

@@ -18,12 +18,12 @@ from aurum_worker.models.mt5 import (
     BrokerSymbolObservation,
     CandleRequest,
     CandleSeries,
+    ComponentHeartbeat,
     DatabaseReconciliationState,
     HistoricalDealObservation,
     HistoricalOrderObservation,
     HistoryRequest,
     LatestTickObservation,
-    Mt5HealthSnapshot,
     OpenPositionObservation,
     ReconciliationMismatch,
     ReconciliationReport,
@@ -55,7 +55,6 @@ class Mt5ReadAdapter(BrokerReadAdapter, Protocol):
     """Future MT5 boundary; Bootstrap grants read capability only."""
 
 
-@runtime_checkable
 @runtime_checkable
 class Mt5ReadPort(Protocol):
     """Complete Milestone 2 read-only terminal capability."""
@@ -129,7 +128,7 @@ class Mt5ObservationPersistencePort(Protocol):
 
     def complete_reconciliation(self, report: ReconciliationReport) -> str: ...
 
-    def record_heartbeat(self, snapshot: Mt5HealthSnapshot) -> str: ...
+    def record_component_heartbeat(self, heartbeat: ComponentHeartbeat) -> str: ...
 
     def record_incident(
         self,
