@@ -58,7 +58,7 @@ Exit gate:
 
 ## Milestone 2 — Read-only Windows MT5 Worker
 
-Release status (2026-09-02): **COMPLETE WITH DOCUMENTED LIMITATIONS**, contingent on the heartbeat/liveness patch passing its final local gates and a new clean-checkout Pull Request run. The final local gates passed on 2026-09-02. The earlier source-review patch passed all three required jobs for the read-only Windows boundary, confirmed binding, bounded history evidence, polling separation, candle classification, smoke outcomes, and fail-closed validation, but that run does not verify the newer heartbeat changes; new `quality`, `database`, and `windows-mt5-boundary` conclusions remain pending. Milestone 3 is not started or authorized. The real-terminal smoke remains `NOT RUN` unless an operator explicitly opts in with an eligible local Demo Terminal and every check succeeds.
+Release status (2026-09-02): **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates passed, and Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. Milestone 3 is not started or authorized. The real-terminal smoke remains `NOT RUN` unless an operator explicitly opts in with an eligible local Demo Terminal and every check succeeds.
 
 Deliver:
 
@@ -90,7 +90,7 @@ Heartbeat/liveness verification evidence currently present in source:
 - Web regressions for renewed versus expired evidence, missing/invalid rows, blocked Worker state, delayed market data, labels, and sensitive-field exclusion;
 - nine database suites with 400 pgTAP assertions, including many bounded tick/heartbeat updates, no routine audit growth, forced RLS, owner isolation, and least privilege.
 
-The final local suite passed with 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, four concurrent-claim assertions, clean builds, generated types, dependency checks, and security scans. The new Pull Request run remains pending and is not claimed here.
+The final local suite passed with 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, four concurrent-claim assertions, clean builds, generated types, dependency checks, and security scans. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`.
 
 ## Milestone 3 — Shadow Pipeline
 

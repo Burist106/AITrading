@@ -11,10 +11,10 @@ Aurum Console is a safety-first control-plane and Windows Worker foundation for 
 - Maximum open Positions: **1**
 - Future executable proposals require a Stop Loss
 - Completed: **Bootstrap and Milestone 1**
-- Milestone 2 release status: **COMPLETE WITH DOCUMENTED LIMITATIONS**, contingent on the heartbeat/liveness patch passing its final local gates and a new clean-checkout Pull Request run; the local gates passed on 2026-09-02 and the new Pull Request run is pending
+- Milestone 2: **COMPLETE WITH DOCUMENTED LIMITATIONS**; the heartbeat/liveness local gates and the new clean-checkout Pull Request run passed on 2026-09-02
 - Milestone 3: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**
 
-Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch. The previously green source-review CI run does not verify the newer heartbeat/liveness changes; the status above must not be treated as re-verified until the new patch HEAD passes all required jobs.
+Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch. Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on heartbeat implementation commit `3e25007`.
 
 ## Architecture
 
@@ -79,7 +79,7 @@ pnpm check
 
 The gate includes formatting, lint, TypeScript/Python type checks, unit/component tests, production builds, a tracked-file and Git-history secret scan, and syntax-aware production runtime-boundary checks.
 
-Heartbeat/liveness regression tests cover continuous renewal, authoritative-state caps, tick-freshness mapping, Web expiry handling, bounded database upserts, RLS, and no-audit-growth behavior. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; format, lint, type-check, production build, generated types, dependency checks, and security scans also passed. The new Pull Request conclusions remain pending and are not claimed here.
+Heartbeat/liveness regression tests cover continuous renewal, authoritative-state caps, tick-freshness mapping, Web expiry handling, bounded database upserts, RLS, and no-audit-growth behavior. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; format, lint, type-check, production build, generated types, dependency checks, and security scans also passed. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`.
 
 Run the dependency checks separately:
 

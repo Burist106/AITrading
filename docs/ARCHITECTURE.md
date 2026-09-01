@@ -2,7 +2,7 @@
 
 ## Scope and invariants
 
-This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. Its release status is **COMPLETE WITH DOCUMENTED LIMITATIONS** only after the current heartbeat/liveness patch passes final local gates and a new clean-checkout Pull Request run. The local gates passed on 2026-09-02; the new Pull Request run is pending, and the earlier source-review CI run does not verify this patch. The system observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against separately confirmed durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
+This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. Its release status is **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; that run verified `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. The system observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against separately confirmed durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
 
 The following invariants apply at every boundary:
 
@@ -125,7 +125,7 @@ The database can enforce Demo/XAUUSD identity, volume and Position ceilings, man
 
 ## Heartbeat patch verification status
 
-Regression coverage includes continuous component renewal, failed/degraded authoritative caps, `reconciliation_required`, all five tick-freshness outcomes, failure propagation, Web missing/expired/invalid handling, Thai labels, bounded tick/heartbeat upserts, RLS, and no routine audit growth. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions across nine suites, and four concurrent-claim assertions. Format, lint, type-check, production build, generated types, dependency checks, secret/history scans, runtime-boundary scan, and MT5 AST allowlist also passed. The new `quality`, `database`, and `windows-mt5-boundary` Pull Request jobs remain pending, so the complete patch gate is not yet claimed.
+Regression coverage includes continuous component renewal, failed/degraded authoritative caps, `reconciliation_required`, all five tick-freshness outcomes, failure propagation, Web missing/expired/invalid handling, Thai labels, bounded tick/heartbeat upserts, RLS, and no routine audit growth. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions across nine suites, and four concurrent-claim assertions. Format, lint, type-check, production build, generated types, dependency checks, secret/history scans, runtime-boundary scan, and MT5 AST allowlist also passed. Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`.
 
 ## Deferred architecture
 

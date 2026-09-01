@@ -2,7 +2,7 @@
 
 ## Scope
 
-Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS** only after the current heartbeat/liveness patch passes its final local gates and a new clean-checkout Pull Request run. The local gates passed on 2026-09-02; the new Pull Request run is pending, and the prior source-review CI result is not evidence for this newer patch. The milestone adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project. Milestone 3 is not started or authorized.
+Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; all three required jobs verified implementation commit `3e25007`. The milestone adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project. Milestone 3 is not started or authorized.
 
 The invariant boundary is fixed:
 
@@ -145,4 +145,4 @@ Database constraints enforce identity, ownership, version, lifecycle, Demo/XAUUS
 
 ## Verification status for this patch
 
-Worker, Web, contract, fixture, and database regressions cover component allowlists, continuous renewal, authoritative-state caps, `reconciliation_required`, all tick-freshness outcomes, bounded upserts, no audit growth, forced RLS, least privilege, owner isolation, expiry-derived `unknown`, and safe Thai labels. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; formatting, lint, type-check, builds, generated types, dependency checks, and all repository security scans passed. The new Pull Request jobs remain pending, so the complete patch gate is not yet claimed. The real-terminal smoke remains `NOT RUN`.
+Worker, Web, contract, fixture, and database regressions cover component allowlists, continuous renewal, authoritative-state caps, `reconciliation_required`, all tick-freshness outcomes, bounded upserts, no audit growth, forced RLS, least privilege, owner isolation, expiry-derived `unknown`, and safe Thai labels. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; formatting, lint, type-check, builds, generated types, dependency checks, and all repository security scans passed. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`. The real-terminal smoke remains `NOT RUN`.
