@@ -38,7 +38,7 @@ Forbidden:
 
 ## Milestone 1 — Supabase Domain and Security Foundation
 
-Status (2026-08-26): **complete locally with documented limitations**. The schema, forced RLS, secured actions, durable queue, generated types, read-only Web adapters, and local database tests are implemented. No remote Supabase project was linked or changed. GitHub Actions verified the clean-checkout quality and database jobs on published implementation commit `ab7df47`; Worker restart/reconnect reconciliation remains a pre-execution gate. Milestone 2 has not started.
+Status (2026-08-26): **complete with documented limitations**. GitHub Actions verified the published Milestone 1 implementation on commit `ab7df47`. Milestone 2 extends this foundation without changing the Milestone 1 command semantics.
 
 Deliver:
 
@@ -58,6 +58,8 @@ Exit gate:
 
 ## Milestone 2 — Read-only Windows MT5 Worker
 
+Release status (2026-09-02): **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates passed, and Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. Milestone 3 is not started or authorized. The real-terminal smoke remains `NOT RUN` unless an operator explicitly opts in with an eligible local Demo Terminal and every check succeeds.
+
 Deliver:
 
 - MT5 initialize/shutdown adapter
@@ -67,7 +69,14 @@ Deliver:
 - Latest tick and historical candle reads
 - Open positions and order-history reads
 - Worker heartbeat and system health
+- Poller-owned `execution.worker`, `execution.mt5_adapter`, and `execution.market_data` heartbeat producers
+- Default 5/15/600-second polling cadences with a default 30-second heartbeat TTL, bounds 15–300 seconds, and TTL at least three tick intervals
+- Authoritative Worker-health cap, `reconciliation_required` gate, and exact `TICK_DELAYED` freshness semantics
+- Missing/expired/invalid Web heartbeat derivation to `unknown` and explicit Thai component labels
+- Bounded latest-tick and heartbeat upserts without per-update security-audit growth
 - Local fake MT5 adapter for CI
+- Sanitized owner-scoped Supabase observations and reconciliation evidence
+- Bounded Windows CI import/native-wrapper boundary
 
 Forbidden:
 
@@ -75,7 +84,17 @@ Forbidden:
 - Position modification
 - Automated trading
 
+Heartbeat/liveness verification evidence currently present in source:
+
+- Worker regressions for continuous short-poll renewal, authoritative Healthy caps, reconciliation-required behavior, failure propagation, and the five tick-freshness outcomes;
+- Web regressions for renewed versus expired evidence, missing/invalid rows, blocked Worker state, delayed market data, labels, and sensitive-field exclusion;
+- nine database suites with 400 pgTAP assertions, including many bounded tick/heartbeat updates, no routine audit growth, forced RLS, owner isolation, and least privilege.
+
+The final local suite passed with 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, four concurrent-claim assertions, clean builds, generated types, dependency checks, and security scans. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`.
+
 ## Milestone 3 — Shadow Pipeline
+
+Status: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**.
 
 Deliver:
 

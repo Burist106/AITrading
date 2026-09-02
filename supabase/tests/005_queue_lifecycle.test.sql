@@ -679,7 +679,7 @@ select pg_catalog.set_config(
 );
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', 'healthy', 'Safe detail.',
+    'execution.worker', 'healthy', 'HEALTHY',
     pg_catalog.clock_timestamp(), 30
   ),
   'WORKER_UNAUTHORIZED',
@@ -696,7 +696,7 @@ select pg_catalog.set_config(
 );
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', 'healthy', 'Safe detail.',
+    'execution.worker', 'healthy', 'HEALTHY',
     pg_catalog.clock_timestamp(), 30
   ),
   'WORKER_UNAUTHORIZED',
@@ -710,7 +710,7 @@ select pg_catalog.set_config(
 
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', 'healthy', 'Worker fixture is healthy.',
+    'execution.worker', 'healthy', 'HEALTHY',
     pg_catalog.clock_timestamp(), 30
   ),
   'HEARTBEAT_RECORDED', 'Worker heartbeat upserts through its bounded RPC'
@@ -723,41 +723,39 @@ select is(
 );
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', 'degraded', 'Worker fixture remains safe.',
+    'execution.worker', 'degraded', 'RECONCILIATION_INCOMPLETE',
     pg_catalog.clock_timestamp(), 30
   ),
   'HEARTBEAT_RECORDED', 'a newer Worker heartbeat updates the durable row'
 );
 reset role;
-select results_eq(
-  $$select action, old_version, new_version from public.audit_logs
+select is(
+  (select pg_catalog.count(*) from public.audit_logs
     where target_id = (
       select id from public.system_heartbeats where worker_id = 'worker-a'
-    ) and action in ('heartbeat_recorded', 'heartbeat_updated')
-    order by new_version$$,
-  $$values
-    ('heartbeat_recorded', null::integer, 1),
-    ('heartbeat_updated', 1, 2)$$,
-  'heartbeat insert and update each append exact monotonic audit evidence'
+    ) and action in ('heartbeat_recorded', 'heartbeat_updated')),
+  0::bigint,
+  'routine heartbeat insert and update append no security-audit records'
 );
 set local role aurum_worker;
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', null::public.system_health_state, 'Safe detail.',
+    'execution.worker', null::public.system_health_state,
+    'RECONCILIATION_INCOMPLETE',
     pg_catalog.clock_timestamp(), 30
   ),
   'INVALID_HEARTBEAT', 'NULL heartbeat state returns a deterministic safe code'
 );
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', 'healthy', 'Safe detail.',
+    'execution.worker', 'healthy', 'HEALTHY',
     pg_catalog.clock_timestamp(), null
   ),
   'INVALID_HEARTBEAT', 'NULL heartbeat validity returns a deterministic safe code'
 );
 select is(
   public.worker_record_heartbeat(
-    'execution.worker', 'healthy', 'Safe stale detail.',
+    'execution.worker', 'healthy', 'HEALTHY',
     pg_catalog.clock_timestamp() - interval '1 day', 30
   ),
   'STALE_HEARTBEAT', 'stale heartbeat is rejected without a state change'
@@ -784,8 +782,8 @@ select is(
      and target_id = (
        select id from public.system_heartbeats where worker_id = 'worker-a'
      )),
-  2::bigint,
-  'invalid and stale heartbeat calls append no audit record'
+  0::bigint,
+  'invalid and stale heartbeat calls also append no audit record'
 );
 
 create temporary table rejected_incident_snapshot on commit drop as

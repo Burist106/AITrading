@@ -4,6 +4,8 @@
 
 Build a safety-first XAU/USD trading research and Demo execution platform. The system is strictly `DEMO ONLY` until a separate future project explicitly changes that rule. No task in the current roadmap authorizes Live Trading.
 
+Current delivery status: Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. Milestone 3 is not started and is not authorized by the current task.
+
 ## Source-of-truth order
 
 When sources disagree, use this precedence:
@@ -38,15 +40,15 @@ The prototype is a visual and behavioral reference, not production source code.
 
 ## Credential boundaries
 
-Never read, print, log, commit, upload, or place into prompts:
+Never request, print, log, commit, upload, or place into prompts:
 
-- MT5 login, password, server credentials, or terminal secrets
+- MT5 password, server credentials, or terminal secrets
 - Supabase secret keys or Worker credential
 - LINE channel secret or access token
 - OpenAI API keys
 - Browser cookies or personal access tokens
 
-Use `.env.example` with empty placeholder names only. MT5 credentials must remain on the Windows Execution Node in future milestones.
+An MT5 password must never be requested, read, accepted, persisted, logged, uploaded, or passed to `initialize()`. The Worker must never call `login()`. A full account login must never be logged, persisted remotely, displayed, or committed. The Worker may transiently inspect the account identifier and server returned by `account_info()` solely for fail-closed Demo and binding verification; raw values must stay in process memory, and every log, database row, UI response, test snapshot, and incident must use a masked or one-way fingerprinted identifier. Use `.env.example` with empty placeholder names only.
 
 ## Development workflow
 
@@ -95,6 +97,13 @@ Use current stable supported versions and lock dependencies. Document exact vers
 - No execution method before its authorized milestone.
 - Local safety state and reconciliation must be designed before Demo execution.
 - Tests must use fakes/adapters; CI must not require a running MT5 terminal.
+- Milestone 2 native access is Windows-only, serialized, uses an explicit local terminal path, and may call only `initialize`, `shutdown`, `version`, `last_error`, `terminal_info`, `account_info`, `symbols_get`, `symbol_info`, `symbol_info_tick`, `copy_rates_from_pos`, `copy_rates_range`, `positions_get`, `orders_get`, `history_orders_get`, and `history_deals_get`.
+- Pass the terminal executable path to `initialize()` as its sole positional argument. Never pass login, password, server, or any other credential parameter.
+- A broker symbol is canonical `XAUUSD` only when its reported base currency is `XAU` and profit currency is `USD`; names, descriptions, and aliases never establish that fact.
+- Observed symbol specifications are append-only evidence and never become a confirmed binding automatically. Missing or changed confirmation must fail closed.
+- Short tick polling, Position/active-Order polling, and full reconciliation use separate bounded cadences. History queries and reconciliation rows belong only to full reconciliation cycles, not each tick.
+- Terminal and other safety-sensitive booleans must be explicitly present and strictly boolean; missing, invalid, or false connection state blocks account verification.
+- `order_send`, `order_check`, `order_calc_profit`, `order_calc_margin`, `login`, `symbol_select`, and every `market_book_*` call remain forbidden. Do not use dynamic dispatch to bypass this boundary.
 
 ## Database requirements
 

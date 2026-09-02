@@ -1,8 +1,8 @@
 # Bootstrap Design Traceability
 
-## Milestone 1 integration status
+## Milestone 2 integration status
 
-Milestone 1 adds the local Supabase domain/security foundation and an owner-scoped, read-only web adapter boundary. It does not connect that adapter to the existing screens and does not turn any fixture control into an operational action. Proposal facts and normalized risk checks remain separate read models, a missing or expired heartbeat resolves to `unknown`, and command progress uses the browser-safe projection without payload, lease token, or raw last error. The table below continues to describe the Bootstrap visual shell; its broker/order/Position and emergency scenarios remain presentation-only.
+Milestone 2 preserves the Bootstrap visual shell and Milestone 1 owner-scoped control-plane boundary. It adds one bounded, read-only MT5 observation panel and an owner-scoped mapper for sanitized account, symbol, latest-tick, and reconciliation rows. The visible panel remains fixture-driven until deployment wiring is separately authorized; it adds no MT5 controls and does not turn any fixture action into an operational action. Proposal facts and normalized risk checks remain separate read models, a missing or expired heartbeat resolves to `unknown`, and command progress uses the browser-safe projection without payload, lease token, or raw last error. The table below otherwise continues to describe the Bootstrap shell; its broker/order/Position and emergency scenarios remain presentation-only.
 
 ## Reference policy
 

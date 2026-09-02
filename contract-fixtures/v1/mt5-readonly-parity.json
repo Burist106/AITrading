@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "validDecimalStrings": ["0", "0.0100", "2345.10", "-0.25"],
+  "invalidDecimalValues": [0.1, "1e-8", " 1", "NaN", "Infinity"],
+  "validTicketStrings": ["1", "90071992547409930001"],
+  "invalidTicketValues": [0, -1, 9007199254740991, "1.0", "ticket"]
+}

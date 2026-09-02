@@ -20,6 +20,12 @@ const TABLE_NAMES = [
   "broker_symbols",
   "feature_snapshots",
   "market_snapshots",
+  "mt5_account_observations",
+  "mt5_history_query_evidence",
+  "mt5_latest_tick_observations",
+  "mt5_reconciliation_mismatches",
+  "mt5_reconciliation_runs",
+  "mt5_symbol_observations",
   "position_events",
   "positions",
   "profiles",
@@ -80,15 +86,22 @@ const USER_FUNCTION_NAMES = [
 ] as const;
 
 const WORKER_FUNCTION_NAMES = [
+  "worker_begin_reconciliation",
   "worker_claim_next_command",
+  "worker_complete_reconciliation",
   "worker_complete_command",
   "worker_fail_command",
   "worker_mark_command_executing",
   "worker_mark_command_validating",
   "worker_record_heartbeat",
   "worker_record_incident",
+  "worker_read_mt5_reconciliation_state",
+  "worker_record_mt5_account_observation",
+  "worker_record_mt5_symbol_observation",
+  "worker_record_reconciliation_mismatch",
   "worker_reject_command",
   "worker_renew_command_lease",
+  "worker_upsert_mt5_latest_tick",
 ] as const;
 
 const FUNCTION_NAMES = [
@@ -145,11 +158,11 @@ describe("generated database type parity", () => {
     expect(POSITION_STATUSES).toHaveLength(5);
   });
 
-  it("contains exactly the 21 Milestone 1 tables", () => {
+  it("contains exactly the 27 Milestone 2 tables", () => {
     expectTypeOf<keyof Database["public"]["Tables"]>().toEqualTypeOf<
       (typeof TABLE_NAMES)[number]
     >();
-    expect(TABLE_NAMES).toHaveLength(21);
+    expect(TABLE_NAMES).toHaveLength(27);
     expect(TABLE_NAMES).not.toContain("notifications");
     expect(TABLE_NAMES).not.toContain("candles");
     expect(TABLE_NAMES).not.toContain("strategies");
@@ -172,13 +185,13 @@ describe("generated database type parity", () => {
     expect(COMMAND_VIEW_COLUMNS).toHaveLength(26);
   });
 
-  it("contains all and only nine user plus nine Worker functions", () => {
+  it("contains all and only nine user plus sixteen Worker functions", () => {
     expectTypeOf<keyof Database["public"]["Functions"]>().toEqualTypeOf<
       (typeof FUNCTION_NAMES)[number]
     >();
     expect(USER_FUNCTION_NAMES).toHaveLength(9);
-    expect(WORKER_FUNCTION_NAMES).toHaveLength(9);
-    expect(FUNCTION_NAMES).toHaveLength(18);
+    expect(WORKER_FUNCTION_NAMES).toHaveLength(16);
+    expect(FUNCTION_NAMES).toHaveLength(25);
   });
 
   it("preserves important row nullability and safety columns", () => {

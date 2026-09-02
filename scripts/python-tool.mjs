@@ -23,6 +23,7 @@ if (args.length === 0) {
 const result = spawnSync(executable, ["-m", ...args], {
   cwd: process.cwd(),
   encoding: "utf8",
+  env: { ...process.env, PYTHONUTF8: "1" },
   stdio: "inherit",
 });
 

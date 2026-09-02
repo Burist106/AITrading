@@ -27,4 +27,5 @@ const python =
     : ".venv/bin/python";
 
 run(python, ["-m", "pip", "install", "--upgrade", "pip==26.2.1"]);
-run(python, ["-m", "pip", "install", "-e", "apps/worker[dev]"]);
+const extras = process.argv.includes("--mt5") ? "dev,mt5" : "dev";
+run(python, ["-m", "pip", "install", "-e", `apps/worker[${extras}]`]);

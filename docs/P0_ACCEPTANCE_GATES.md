@@ -2,7 +2,7 @@
 
 These gates apply before any Demo broker execution is introduced.
 
-`[x]` means verified in the current Bootstrap/Milestone 1 workspace. `[ ]` means deliberately pending. GitHub Actions completed the clean-checkout quality and database jobs successfully for published implementation commit `ab7df47`; this does not authorize execution.
+`[x]` means verified for the identified implementation. `[ ]` means deliberately pending. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**: the final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02, with `quality`, `database`, and `windows-mt5-boundary` green on implementation commit `3e25007`. The milestone remains read-only and does not authorize execution. Milestone 3 is not started.
 
 ## Repository and quality
 
@@ -11,8 +11,10 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Web tests pass
 - [x] Worker tests pass without MT5 installed
 - [x] Formatting and linting pass
-- [x] CI runs on a clean checkout
+- [x] The final Milestone 2 source-review patch passes all three Pull Request jobs on a clean checkout
 - [x] No credentials or secret values are committed
+- [x] The heartbeat/liveness patch passes the final local format, lint, type, test, build, security, database, and generated-type gates
+- [x] The heartbeat/liveness patch implementation commit `3e25007` passes `quality`, `database`, and `windows-mt5-boundary` in clean-checkout Pull Request run `33541088560`
 
 ## Design traceability
 
@@ -57,7 +59,11 @@ These gates apply before any Demo broker execution is introduced.
 - [x] Local Emergency Stop is included in the Worker design
 - [x] Resume requires reconciliation and a safety checklist
 - [x] Open positions are not silently assumed closed
-- [ ] Worker restart and reconnect reconciliation are designed and tested before execution
+- [x] Worker restart and reconnect reconciliation are designed and tested before execution
+- [x] Reconciliation detects account, server, confirmed-specification, Position, Order, current bounded-history-query, clock, and uncertain-execution mismatches without operational mutation
+- [x] All three enabled execution components renew bounded heartbeats during their owned lightweight poll cadence without audit growth
+- [x] Worker heartbeat remains capped by full reconciliation, and `reconciliation_required` prevents Healthy until a successful full cycle
+- [x] LIVE, DELAYED, STALE, FUTURE_INVALID, and UNAVAILABLE tick mappings plus Web missing/expired/invalid `unknown` behavior pass their final regression gates
 
 ## Broker execution authorization gate
 

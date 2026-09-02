@@ -18,12 +18,15 @@ select is(
         'trade_decisions', 'system_commands', 'system_command_events',
         'broker_orders', 'trade_executions', 'positions', 'position_events',
         'system_components', 'system_heartbeats', 'system_incidents',
-        'audit_logs'
+        'audit_logs', 'mt5_account_observations', 'mt5_symbol_observations',
+        'mt5_latest_tick_observations', 'mt5_history_query_evidence',
+        'mt5_reconciliation_runs',
+        'mt5_reconciliation_mismatches'
       ])
       and relation.relrowsecurity
       and relation.relforcerowsecurity
   ),
-  21,
+  27,
   'every application table has RLS enabled and forced'
 );
 
@@ -55,7 +58,11 @@ select is(
         'feature_snapshots', 'trade_proposals', 'risk_checks',
         'trade_decisions', 'system_commands', 'system_command_events',
         'broker_orders', 'trade_executions', 'positions', 'position_events',
-        'system_components', 'system_heartbeats', 'system_incidents', 'audit_logs'
+        'system_components', 'system_heartbeats', 'system_incidents', 'audit_logs',
+        'mt5_account_observations', 'mt5_symbol_observations',
+        'mt5_latest_tick_observations', 'mt5_history_query_evidence',
+        'mt5_reconciliation_runs',
+        'mt5_reconciliation_mismatches'
       ])
   ),
   0,
@@ -76,7 +83,11 @@ select is(
         'trade_proposals', 'risk_checks', 'trade_decisions', 'system_commands',
         'system_command_events', 'broker_orders', 'trade_executions',
         'positions', 'position_events', 'system_components',
-        'system_heartbeats', 'system_incidents', 'audit_logs'
+        'system_heartbeats', 'system_incidents', 'audit_logs',
+        'mt5_account_observations', 'mt5_symbol_observations',
+        'mt5_latest_tick_observations', 'mt5_history_query_evidence',
+        'mt5_reconciliation_runs',
+        'mt5_reconciliation_mismatches'
       ])
   ),
   0,
@@ -218,12 +229,19 @@ select is(
         'worker_mark_command_validating', 'worker_mark_command_executing',
         'worker_complete_command', 'worker_reject_command',
         'worker_fail_command', 'worker_record_heartbeat',
-        'worker_record_incident'
+        'worker_record_incident',
+        'worker_record_mt5_account_observation',
+        'worker_record_mt5_symbol_observation',
+        'worker_upsert_mt5_latest_tick',
+        'worker_read_mt5_reconciliation_state',
+        'worker_begin_reconciliation',
+        'worker_record_reconciliation_mismatch',
+        'worker_complete_reconciliation'
       ])
       and pg_catalog.has_function_privilege('aurum_worker', procedure.oid, 'EXECUTE')
   ),
-  9,
-  'Worker can execute exactly the nine least-privilege Worker RPCs'
+  16,
+  'Worker can execute exactly the sixteen least-privilege Worker RPCs'
 );
 
 select ok(
@@ -484,7 +502,11 @@ select set_eq(
     ('risk_policies'), ('risk_policy_versions'), ('trade_proposals'),
     ('trade_decisions'), ('system_commands'), ('system_command_events'),
     ('positions'), ('system_components'), ('system_heartbeats'),
-    ('system_incidents')$$,
+    ('system_incidents'), ('broker_orders'), ('broker_symbols'),
+    ('mt5_account_observations'), ('mt5_symbol_observations'),
+    ('mt5_latest_tick_observations'), ('mt5_history_query_evidence'),
+    ('mt5_reconciliation_runs'),
+    ('mt5_reconciliation_mismatches')$$,
   'secured function owner SELECT grants match the exact RPC read set'
 );
 
@@ -497,7 +519,10 @@ select set_eq(
   $$values
     ('risk_policy_versions'), ('trade_decisions'), ('system_commands'),
     ('system_command_events'), ('system_heartbeats'), ('system_incidents'),
-    ('audit_logs')$$,
+    ('audit_logs'), ('mt5_account_observations'),
+    ('mt5_symbol_observations'), ('mt5_latest_tick_observations'),
+    ('mt5_history_query_evidence'), ('mt5_reconciliation_runs'),
+    ('mt5_reconciliation_mismatches')$$,
   'secured function owner INSERT grants match the exact durable-write set'
 );
 
@@ -507,7 +532,8 @@ select set_eq(
     where grantee = 'aurum_function_owner'
       and table_schema = 'public'
       and privilege_type = 'UPDATE'$$,
-  $$values ('risk_policies'), ('system_commands'), ('system_heartbeats')$$,
+  $$values ('risk_policies'), ('system_commands'), ('system_heartbeats'),
+    ('mt5_latest_tick_observations'), ('mt5_reconciliation_runs')$$,
   'secured function owner UPDATE grants match the exact lifecycle set'
 );
 
@@ -541,7 +567,16 @@ select set_eq(
     ('positions:r'), ('system_components:r'),
     ('system_heartbeats:r'), ('system_heartbeats:a'), ('system_heartbeats:w'),
     ('system_incidents:r'), ('system_incidents:a'),
-    ('audit_logs:a')$$,
+    ('audit_logs:a'), ('broker_symbols:r'),
+    ('mt5_account_observations:r'), ('mt5_account_observations:a'),
+    ('mt5_symbol_observations:r'), ('mt5_symbol_observations:a'),
+    ('mt5_latest_tick_observations:r'), ('mt5_latest_tick_observations:a'),
+    ('mt5_latest_tick_observations:w'),
+    ('mt5_history_query_evidence:r'), ('mt5_history_query_evidence:a'),
+    ('mt5_reconciliation_runs:r'), ('mt5_reconciliation_runs:a'),
+    ('mt5_reconciliation_runs:w'),
+    ('mt5_reconciliation_mismatches:r'),
+    ('mt5_reconciliation_mismatches:a'), ('broker_orders:r')$$,
   'function-owner RLS policies expose only the exact operation matrix'
 );
 

@@ -1,6 +1,9 @@
 import {
   IdentifierSchema,
   IsoDateTimeSchema,
+  Mt5ComponentCodeSchema,
+  Mt5ComponentHeartbeatStateSchema,
+  Mt5ReasonCodeSchema,
   PersistedPositionSchema,
   PersistedRiskCheckSchema,
   PersistedTradeProposalSchema,
@@ -56,6 +59,72 @@ export interface HeartbeatReadModel {
   expiresAt: string;
   version: number;
   stale: boolean;
+}
+
+function heartbeatFromReadRow(
+  row: SystemHeartbeatReadRow,
+  componentCode: string,
+  capturedAt: string,
+): HeartbeatReadModel | null {
+  try {
+    const id = UuidSchema.parse(row.id);
+    const workerId = workerIdentifier(row.worker_id);
+    const observedAt = IsoDateTimeSchema.parse(row.observed_at);
+    const expiresAt = IsoDateTimeSchema.parse(row.expires_at);
+    const observedTimestamp = Date.parse(observedAt);
+    const expiresTimestamp = Date.parse(expiresAt);
+    const capturedTimestamp = Date.parse(capturedAt);
+    const validitySeconds = (expiresTimestamp - observedTimestamp) / 1_000;
+    if (
+      !Number.isInteger(validitySeconds) ||
+      validitySeconds < 15 ||
+      validitySeconds > 300 ||
+      observedTimestamp > capturedTimestamp
+    ) {
+      return null;
+    }
+
+    const mt5Component = Mt5ComponentCodeSchema.safeParse(componentCode);
+    const reportedState = mt5Component.success
+      ? Mt5ComponentHeartbeatStateSchema.parse(row.state)
+      : SystemHealthStateSchema.parse(row.state);
+    const detail = mt5Component.success
+      ? Mt5ReasonCodeSchema.parse(row.detail)
+      : SafeWorkerTextSchema.parse(row.detail);
+    if (
+      mt5Component.success &&
+      ((reportedState === "healthy") !== (detail === "HEALTHY") ||
+        (mt5Component.data === "execution.market_data" &&
+          reportedState === "degraded" &&
+          detail !== "TICK_DELAYED") ||
+        (mt5Component.data === "execution.market_data" &&
+          reportedState === "failed" &&
+          ![
+            "TICK_INVALID",
+            "TICK_STALE",
+            "TICK_FROM_FUTURE",
+            "TICK_UNAVAILABLE",
+          ].includes(detail)))
+    ) {
+      return null;
+    }
+    const stale = expiresTimestamp <= capturedTimestamp;
+
+    return {
+      id,
+      workerId,
+      reportedState,
+      effectiveState: stale ? "unknown" : reportedState,
+      detail,
+      observedAt,
+      expiresAt,
+      version: requiredInteger(row.version, 1),
+      stale,
+    };
+  } catch {
+    // Invalid producer evidence must never expose its detail or become healthy.
+    return null;
+  }
 }
 
 export interface ComponentHealthReadModel {
@@ -285,34 +354,29 @@ export function healthFromReadRows(
   const validatedCapturedAt = IsoDateTimeSchema.parse(capturedAt);
   if (componentRows.length === 0) return null;
 
-  const heartbeats = new Map<string, HeartbeatReadModel>();
+  const heartbeatRowsByComponent = new Map<
+    string,
+    SystemHeartbeatReadRow | null
+  >();
   for (const row of heartbeatRows) {
-    const componentId = UuidSchema.parse(row.system_component_id);
-    if (heartbeats.has(componentId)) {
-      throw new TypeError("Duplicate heartbeat row for a system component.");
-    }
-    const expiresAt = IsoDateTimeSchema.parse(row.expires_at);
-    const stale = Date.parse(expiresAt) <= Date.parse(validatedCapturedAt);
-    const reportedState = SystemHealthStateSchema.parse(row.state);
-    const detail = SafeWorkerTextSchema.parse(row.detail);
-    heartbeats.set(componentId, {
-      id: UuidSchema.parse(row.id),
-      workerId: workerIdentifier(row.worker_id),
-      reportedState,
-      effectiveState: stale ? "unknown" : reportedState,
-      detail,
-      observedAt: IsoDateTimeSchema.parse(row.observed_at),
-      expiresAt,
-      version: requiredInteger(row.version, 1),
-      stale,
-    });
+    const componentId = UuidSchema.safeParse(row.system_component_id);
+    if (!componentId.success) continue;
+    heartbeatRowsByComponent.set(
+      componentId.data,
+      heartbeatRowsByComponent.has(componentId.data) ? null : row,
+    );
   }
 
   return {
     capturedAt: validatedCapturedAt,
     components: componentRows.map((row) => {
       const id = UuidSchema.parse(row.id);
-      const heartbeat = heartbeats.get(id) ?? null;
+      const code = IdentifierSchema.parse(row.code);
+      const heartbeatRow = heartbeatRowsByComponent.get(id) ?? null;
+      const heartbeat =
+        heartbeatRow === null
+          ? null
+          : heartbeatFromReadRow(heartbeatRow, code, validatedCapturedAt);
       const expectedHeartbeatSeconds = row.expected_heartbeat_seconds;
       if (
         expectedHeartbeatSeconds !== null &&
@@ -328,7 +392,7 @@ export function healthFromReadRows(
       }
       return {
         id,
-        code: IdentifierSchema.parse(row.code),
+        code,
         labelTh: IdentifierSchema.parse(row.label_th),
         plane: SystemPlaneSchema.parse(row.plane),
         expectedHeartbeatSeconds,

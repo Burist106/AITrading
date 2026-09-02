@@ -113,6 +113,30 @@ describe("static P0 shell", () => {
     expect(screen.getByText("WORKER_ACK_TIMEOUT")).toBeVisible();
   });
 
+  it("renders the three safe MT5 component identities without sensitive data", async () => {
+    const view = await loadScenarioView(
+      Promise.resolve({ scenario: "no_signal" }),
+    );
+    const { container } = render(<HealthView view={view} />);
+
+    expect(screen.getByText("Aurum Worker")).toBeVisible();
+    expect(screen.getByText("การเชื่อมต่อ MT5")).toBeVisible();
+    expect(screen.getByText("ข้อมูลตลาด XAU/USD")).toBeVisible();
+    expect(screen.getByText("••••3456", { exact: false })).toBeVisible();
+
+    const rendered = container.textContent ?? "";
+    for (const sensitiveValue of [
+      "123456",
+      "Aurum-Demo-Server",
+      "C:\\Private\\terminal64.exe",
+      "Traceback",
+      "private-password",
+      "private-token",
+    ]) {
+      expect(rendered).not.toContain(sensitiveValue);
+    }
+  });
+
   it("exposes exactly the 20 documented states in development", () => {
     render(<DevelopmentStateSimulator />);
     expect(screen.getAllByRole("option")).toHaveLength(20);
