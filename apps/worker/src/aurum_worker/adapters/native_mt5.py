@@ -14,6 +14,7 @@ from aurum_worker.adapters.protocols import Mt5ReadPort
 from aurum_worker.models.mt5 import (
     AccountObservation,
     AccountTradeMode,
+    AccountVerificationState,
     ActiveOrderObservation,
     BrokerSymbolCandidate,
     BrokerSymbolObservation,
@@ -34,6 +35,7 @@ from aurum_worker.models.mt5 import (
     SymbolUsabilityState,
     TerminalObservation,
     TickFreshness,
+    TickTimeDiagnostic,
     Timeframe,
 )
 from aurum_worker.mt5_safety import (
@@ -50,6 +52,7 @@ from aurum_worker.mt5_safety import (
     specification_fingerprint,
     utc_from_epoch,
     utc_from_epoch_milliseconds,
+    verify_account,
 )
 
 ADAPTER_VERSION = "aurum-mt5-read-v1"
@@ -557,6 +560,72 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                 raise self._failure(
                     Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE,
                     "Broker symbol specification is incomplete or invalid.",
+                ) from error
+
+    def get_tick_time_diagnostic(
+        self, broker_symbol: str, *, trace_id: str
+    ) -> TickTimeDiagnostic:
+        """Inspect one native tick's time fields without changing runtime policy.
+
+        This separate local diagnostic capability is not part of the polling or
+        persistence port. It requires an already confirmed bound Demo symbol.
+        """
+        with self._process_lock:
+            module = self._require_connected()
+            if self._config.broker_symbol != broker_symbol:
+                raise self._failure(
+                    Mt5ReasonCode.SYMBOL_NOT_CONFIGURED,
+                    "Diagnostic requires the explicitly configured broker symbol.",
+                )
+            account = self.get_account_info(trace_id=trace_id)
+            verification = verify_account(
+                account, self._config.expected_account_fingerprint
+            )
+            if verification.state is not AccountVerificationState.VERIFIED_DEMO_BOUND:
+                raise self._failure(
+                    verification.reason_code,
+                    "Diagnostic Demo binding was not satisfied.",
+                )
+            confirmed = self._config.smoke_confirmed_specification_fingerprint
+            if confirmed is None:
+                raise self._failure(
+                    Mt5ReasonCode.SYMBOL_SPEC_CONFIRMATION_REQUIRED,
+                    "Diagnostic requires a separately confirmed specification.",
+                )
+            specification = self.get_symbol_specification(
+                broker_symbol, trace_id=trace_id
+            )
+            if specification.usability_state is not SymbolUsabilityState.USABLE:
+                raise self._failure(
+                    specification.unusable_reason
+                    or Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE,
+                    "Diagnostic symbol is not usable.",
+                )
+            if specification.specification_fingerprint != confirmed:
+                raise self._failure(
+                    Mt5ReasonCode.SYMBOL_SPEC_CHANGED,
+                    "Diagnostic specification differs from prior confirmation.",
+                )
+            raw = module.symbol_info_tick(broker_symbol)
+            if raw is None:
+                raise self._failure(
+                    Mt5ReasonCode.TICK_UNAVAILABLE, "Diagnostic tick is unavailable."
+                )
+            try:
+                evidence = TickTimeDiagnostic(
+                    observed_at=self._clock(),
+                    native_time=cast(int, _required(raw, "time")),
+                    native_time_msc=cast(int | None, _field(raw, "time_msc")),
+                )
+                # Validate representability, but do not rewrite either native value.
+                utc_from_epoch(evidence.native_time)
+                if evidence.native_time_msc:
+                    utc_from_epoch_milliseconds(evidence.native_time_msc)
+                return evidence
+            except (TypeError, ValueError) as error:
+                raise self._failure(
+                    Mt5ReasonCode.TICK_INVALID,
+                    "Diagnostic timestamp fields are invalid or unavailable.",
                 ) from error
 
     def get_latest_tick(
