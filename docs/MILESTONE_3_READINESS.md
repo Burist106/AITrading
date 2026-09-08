@@ -8,7 +8,7 @@ The user authorized a read-only timestamp diagnostic and a goal to reach readine
 
 - [x] Preserve the released Milestone 2 baseline and implement the diagnostic on a separate branch.
 - [x] Complete local diagnostic regression, format, lint, type, unit, build, dependency, and security checks.
-- [ ] Complete database checks and clean-checkout CI on the published patch.
+- [x] Complete database checks and clean-checkout CI on diagnostic implementation commit `773d64d` (evidence below).
 - [ ] Obtain separately operator-confirmed, local-only Demo diagnostic evidence from the exact reviewed patch.
 - [ ] Establish the native timestamp convention or field defect from evidence; do not guess an offset, alter the PC clock, or widen safety tolerances.
 - [ ] Resolve the timestamp incompatibility within an explicitly reviewed safe contract, if a source correction is justified.
@@ -28,4 +28,12 @@ The new regression was run before implementation and failed because the diagnost
 
 Local database startup was attempted through the repository's isolated wrapper and failed with `The local Docker engine is not running or is unavailable (exit 1)`. Docker Desktop displayed an internal startup error. No factory reset, Docker data deletion, settings change, or diagnostic upload was performed. Local database reset, lint, pgTAP/concurrency tests, and generated-type validation therefore have no passing result for this patch; the Draft PR's isolated database job must supply independent evidence.
 
+That independent evidence is now available: [GitHub Actions run 34247359271](https://github.com/Burist106/AITrading/actions/runs/34247359271) passed all three jobs on implementation commit `773d64d4d9458e409fe1329c255f5e6f0976b185`. The database job passed both deterministic resets, schema lint, 400 pgTAP assertions, four concurrent-claim assertions, and generated-type comparison. The Windows boundary job passed 132 fake-backed tests and the package/import and security checks. The quality job passed the full repository checks, including 268 Worker tests. This is CI evidence, not a successful local Docker repair or a real-terminal smoke.
+
 The Windows boundary CI job also includes the new fake-backed diagnostic tests. Real-terminal diagnostic and full smoke have not been run on this patch. Current process-local operator bindings are absent; prior confirmations are not reconstructed, persisted, or automatically copied from observed account/specification values.
+
+## Next operator gate
+
+Keep [PR #2](https://github.com/Burist106/AITrading/pull/2) in Draft; no merge or branch deletion is authorized. When the operator is available, resume the existing local-only path/account/symbol/specification confirmation sequence against the reviewed diagnostic source. Do not ask for any local value in chat. Run the diagnostic only after all confirmations exist in that process, and retain only its sanitized evidence outside Git. If the native time evidence remains incompatible with freshness policy, classify and stop; do not infer a fixed timezone correction.
+
+After evidence supports a reviewed resolution and the complete real read-only smoke passes, present the roadmap's bounded Shadow Pipeline plan for explicit authorization: versioned market normalization and features, a reproducible rule-based baseline, deterministic eligibility and risk, and traceable shadow proposals/outcomes with owner-scoped dashboard read models. Strategy implementation, Risk Engine implementation, proposal production, approvals, command consumption, and broker execution remain outside this diagnostic follow-up.
