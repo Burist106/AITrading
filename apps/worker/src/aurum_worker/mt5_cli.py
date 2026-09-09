@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from datetime import UTC, datetime, timedelta
@@ -25,7 +26,12 @@ from aurum_worker.models.mt5 import (
     TickFreshness,
     Timeframe,
 )
-from aurum_worker.mt5_safety import is_canonical_xauusd, verify_account
+from aurum_worker.mt5_safety import (
+    is_canonical_xauusd,
+    utc_from_epoch,
+    utc_from_epoch_milliseconds,
+    verify_account,
+)
 from aurum_worker.reconciliation import ReadOnlyReconciliationService
 
 _NOT_RUN = "NOT RUN — REAL MT5 READ-ONLY SMOKE PRECONDITIONS NOT MET"
@@ -212,6 +218,101 @@ def _smoke(config: Mt5WorkerConfig) -> int:
     return exit_code
 
 
+def _diagnostic_output(payload: dict[str, object], code: int) -> int:
+    print(
+        json.dumps(
+            {
+                "diagnostic": "tick_time_v1",
+                "grants_eligibility": False,
+                "smoke_invoked": False,
+                **payload,
+            }
+        )
+    )
+    return code
+
+
+def _tick_time(config: Mt5WorkerConfig) -> int:
+    """Explicit local diagnostic, not a smoke test or a health/eligibility check."""
+    for present, reason in (
+        (config.terminal_path is not None, "TERMINAL_PATH_NOT_CONFIGURED"),
+        (bool(config.broker_symbol), "SYMBOL_NOT_CONFIGURED"),
+        (bool(config.expected_account_fingerprint), "DEMO_ACCOUNT_UNBOUND"),
+        (
+            bool(config.smoke_confirmed_specification_fingerprint),
+            "SYMBOL_SPEC_CONFIRMATION_REQUIRED",
+        ),
+    ):
+        if not present:
+            return _diagnostic_output({"status": "blocked", "reason": reason}, 2)
+    if (
+        config.readonly_smoke
+        or config.max_tick_age_seconds != 10
+        or config.max_clock_drift_seconds != 30
+    ):
+        return _diagnostic_output({"status": "failed", "reason": "CONFIG_INVALID"}, 3)
+    adapter: MetaTrader5ReadAdapter | None = None
+    payload: dict[str, object] = {"status": "failed", "reason": "UNEXPECTED_ERROR"}
+    code = 3
+    try:
+        adapter = MetaTrader5ReadAdapter(config)
+        adapter.connect(trace_id="local-tick-time-diagnostic")
+        assert config.broker_symbol is not None
+        evidence = adapter.get_tick_time_diagnostic(
+            config.broker_symbol, trace_id="local-tick-time-diagnostic"
+        )
+        seconds_at = utc_from_epoch(evidence.native_time)
+        milliseconds_at = (
+            utc_from_epoch_milliseconds(evidence.native_time_msc)
+            if evidence.native_time_msc
+            else None
+        )
+        selected = milliseconds_at or seconds_at
+        observed = evidence.observed_at.astimezone(UTC)
+        signed_age = (observed - selected).total_seconds()
+        payload = {
+            "status": "observed",
+            "timestamp_interpretation": (
+                "epoch interpreted as UTC; source convention not established"
+            ),
+            "worker_utc": observed.isoformat(),
+            "native_time": evidence.native_time,
+            "native_time_msc": evidence.native_time_msc,
+            "time_as_utc": seconds_at.isoformat(),
+            "time_msc_as_utc": milliseconds_at.isoformat() if milliseconds_at else None,
+            "selected_field": "time_msc" if milliseconds_at else "time",
+            "selected_as_utc": selected.isoformat(),
+            "whole_seconds_agree": (
+                evidence.native_time_msc // 1000 == evidence.native_time
+                if evidence.native_time_msc
+                else None
+            ),
+            "signed_age_seconds": str(signed_age),
+            "future_limit_exceeded": signed_age < -config.max_clock_drift_seconds,
+            "age_limit_exceeded": signed_age > config.max_tick_age_seconds,
+            "max_tick_age_seconds": config.max_tick_age_seconds,
+            "max_clock_drift_seconds": config.max_clock_drift_seconds,
+        }
+        code = 0
+    except Mt5ReadFailure as failure:
+        code, _ = _smoke_failure_outcome(failure)
+        payload = {
+            "status": "blocked" if code == 2 else "failed",
+            "reason": failure.error.reason_code.value,
+        }
+    except Exception:
+        payload = {"status": "failed", "reason": "UNEXPECTED_ERROR"}
+        code = 3
+    finally:
+        if adapter is not None:
+            try:
+                adapter.disconnect()
+            except Exception:
+                payload = {"status": "failed", "reason": "SHUTDOWN_FAILED"}
+                code = 3
+    return _diagnostic_output(payload, code)
+
+
 def _smoke_preconditions_present() -> bool:
     """Check opt-in preconditions without parsing or starting smoke configuration."""
 
@@ -228,6 +329,10 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         config = Mt5WorkerConfig.from_environ()
     except Exception:
+        if args == ["tick-time"]:
+            return _diagnostic_output(
+                {"status": "failed", "reason": "CONFIG_INVALID"}, 3
+            )
         if args == ["smoke"]:
             print("FAILED — CONFIG_INVALID")
             return 3
@@ -237,7 +342,9 @@ def main(arguments: list[str] | None = None) -> int:
         return _fingerprint(config)
     if args == ["smoke"]:
         return _smoke(config)
-    print("Usage: aurum-mt5-readonly [fingerprint|smoke]")
+    if args == ["tick-time"]:
+        return _tick_time(config)
+    print("Usage: aurum-mt5-readonly [fingerprint|smoke|tick-time]")
     return 2
 
 

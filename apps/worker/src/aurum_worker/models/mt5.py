@@ -389,6 +389,14 @@ class BrokerSymbolObservation(ObservationModel):
         return self
 
 
+class TickTimeDiagnostic(Mt5Model):
+    """Local-only native time evidence; never a persisted market observation."""
+
+    observed_at: AwareDatetime
+    native_time: Annotated[int, Field(gt=0)]
+    native_time_msc: Annotated[int, Field(ge=0)] | None
+
+
 class LatestTickObservation(ObservationModel):
     symbol: SafeIdentifier
     bid: PositiveDecimal

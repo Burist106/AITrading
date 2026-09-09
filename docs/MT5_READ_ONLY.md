@@ -55,6 +55,8 @@ Dynamic lookup or dispatch of MT5 calls is also forbidden. The syntax-aware runt
 
 ## Configuration
 
+The user-authorized [remembered local Demo profile](LOCAL_MT5_PROFILE.md) provides a separate desktop setup and profile-backed command path. It stores only manually confirmed local binding values as current-user Windows DPAPI ciphertext across restarts. It does not change the environment-backed commands or the deployed database-backed Worker described below.
+
 Only these local variables are recognized:
 
 ```text
@@ -160,6 +162,16 @@ Seven Worker-only RPCs record/read observation and reconciliation state. They de
 The Web Console uses owner-scoped selects and maps rows through strict Zod contracts. It exposes masked identity, symbol/specification, latest tick, safe health, counts, and reconciliation evidence only. A missing, expired, duplicate, or invalid heartbeat becomes derived `unknown`, and invalid producer detail is not exposed. A healthy MT5 eligibility projection additionally requires a current tick observation, a live tick, a usable symbol, successful Order and Deal evidence, zero mismatches, and exact agreement between the latest account/symbol/tick identifiers and the matched reconciliation. Component Healthy alone is insufficient. The console has no MT5 action buttons.
 
 ## Optional real-terminal smoke
+
+### Explicit local timestamp diagnostic
+
+The separately authorized follow-up command is `pnpm worker:mt5:tick-time`. It is not run automatically and is not the real smoke test. Supply the existing process-local terminal path, account fingerprint, broker symbol, and independently inspected specification confirmation before invoking it. Leave `AURUM_MT5_READONLY_SMOKE` unset; the diagnostic rejects smoke opt-in or nondefault 10/30-second freshness settings.
+
+It rechecks the bound Demo account and usable confirmed XAU/USD specification before exactly one allowed native tick read. JSON contains only native numeric `time` and `time_msc`, UTC interpretations, the UTC observation clock, selected-field provenance, whole-second agreement, signed age, and default-limit comparisons. Missing/zero milliseconds remain explicit. A disagreement or future timestamp remains evidence of an unresolved gate, not permission to rewrite time.
+
+Exit `0` with `status=observed` means only that diagnostic evidence was read and shutdown completed. It explicitly grants no eligibility and invokes no smoke. Policy blocks exit `2`; configuration, native technical, unexpected, and shutdown failures exit `3`. Failure output discards partial observations and includes only a bounded reason. The command exposes no account/server/terminal path, fingerprint, broker alias, raw structures, prices, exceptions, or credentials. It has no persistence/browser/heartbeat path and does not read candles, Positions, Orders, or histories. The normal read port and runtime normalization are unchanged.
+
+### Full read-only smoke
 
 The command is:
 

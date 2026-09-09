@@ -71,6 +71,8 @@ Do not add credentials to the repository. Copy variable names from `.env.example
 
 ## Verification
 
+For repeated local Demo checks without copying fingerprints after every restart, use the user-authorized [encrypted local profile setup](docs/LOCAL_MT5_PROFILE.md) and the root `Aurum MT5.cmd` launcher. The operator must confirm the account and specification once; subsequent reads recheck those exact bindings, never auto-confirm changes, and never remember smoke opt-in.
+
 Run the full non-database gate:
 
 ```text
