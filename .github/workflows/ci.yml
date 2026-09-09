@@ -103,6 +103,6 @@ jobs:
           if ($version -ne "5.0.6090") { throw "Unexpected MetaTrader5 package version" }
           & .venv/Scripts/python.exe -c "import MetaTrader5"
       - name: Run native wrapper unit tests
-        run: .venv/Scripts/python.exe -m pytest apps/worker/tests/test_mt5_native.py apps/worker/tests/test_mt5_models.py apps/worker/tests/test_mt5_tick_time.py
+        run: .venv/Scripts/python.exe -m pytest apps/worker/tests/test_mt5_native.py apps/worker/tests/test_mt5_models.py apps/worker/tests/test_mt5_tick_time.py apps/worker/tests/test_local_mt5_profile.py apps/worker/tests/test_mt5_profile_setup.py apps/worker/tests/test_mt5_profile_cli.py
       - name: Run secret and runtime boundary scanners
         run: pnpm security

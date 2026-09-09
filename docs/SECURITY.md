@@ -131,6 +131,8 @@ Audit metadata is bounded and rejects secret-shaped keys such as tokens, passwor
 
 ## Credential and network rules
 
+The explicitly authorized local-profile follow-up is a narrow exception to the earlier process-only validation setup. It permits only manually confirmed path/symbol/account-hash/specification-hash metadata in current-user DPAPI ciphertext outside Git. No password or raw identity is accepted, and no opt-in, safety limit, or pass result is saved. Runtime revalidation, separate manual confirmation, fail-closed corruption handling, and the local threat model are documented in [LOCAL_MT5_PROFILE.md](LOCAL_MT5_PROFILE.md). It creates no browser, remote database, credential, or broker-write capability.
+
 - Local Supabase runs inside a disposable, pinned Docker-in-Docker boundary whose outer published ports are verified as IPv4 loopback-only. The inner Docker API remains on a private outer network and the host Docker socket is never mounted.
 - CLI start/status output is suppressed because it can contain local keys.
 - Exact image digests, privileged-container identity, labels, mounts, inner/outer network membership, and port mappings are checked before and after commands. A failed database command removes only the label-verified Aurum resources.

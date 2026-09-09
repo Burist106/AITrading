@@ -34,6 +34,8 @@ The Windows boundary CI job also includes the new fake-backed diagnostic tests. 
 
 ## Next operator gate
 
+On 2026-09-09 the user authorized the separate [encrypted local profile setup](LOCAL_MT5_PROFILE.md) to remove repeated fingerprint entry across restarts. The operator may complete its two local confirmation dialogs once and subsequently use the profile-backed diagnostic. Saved values are never a cached pass or automatic confirmation of changed observations. This narrow authorization supersedes the earlier requirement to re-enter all binding values each session; it does not resolve the timestamp gate or authorize Milestone 3.
+
 Keep [PR #2](https://github.com/Burist106/AITrading/pull/2) in Draft; no merge or branch deletion is authorized. When the operator is available, resume the existing local-only path/account/symbol/specification confirmation sequence against the reviewed diagnostic source. Do not ask for any local value in chat. Run the diagnostic only after all confirmations exist in that process, and retain only its sanitized evidence outside Git. If the native time evidence remains incompatible with freshness policy, classify and stop; do not infer a fixed timezone correction.
 
 After evidence supports a reviewed resolution and the complete real read-only smoke passes, present the roadmap's bounded Shadow Pipeline plan for explicit authorization: versioned market normalization and features, a reproducible rule-based baseline, deterministic eligibility and risk, and traceable shadow proposals/outcomes with owner-scoped dashboard read models. Strategy implementation, Risk Engine implementation, proposal production, approvals, command consumption, and broker execution remain outside this diagnostic follow-up.

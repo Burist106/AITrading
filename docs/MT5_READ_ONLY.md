@@ -55,6 +55,8 @@ Dynamic lookup or dispatch of MT5 calls is also forbidden. The syntax-aware runt
 
 ## Configuration
 
+The user-authorized [remembered local Demo profile](LOCAL_MT5_PROFILE.md) provides a separate desktop setup and profile-backed command path. It stores only manually confirmed local binding values as current-user Windows DPAPI ciphertext across restarts. It does not change the environment-backed commands or the deployed database-backed Worker described below.
+
 Only these local variables are recognized:
 
 ```text
