@@ -2,7 +2,9 @@
 
 ## Scope
 
-These local migrations establish the Milestone 1 control plane and the Milestone 2 sanitized MT5 observation foundation. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. `broker_orders`, `trade_executions`, and `positions` remain protected read-model foundations only. No database action creates an order, records a simulated execution, changes a Position, or calls an external system. Milestone 3 is not started.
+These local migrations establish the Milestone 1 control plane and the Milestone 2 sanitized MT5 observation foundation. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. `broker_orders`, `trade_executions`, and `positions` remain protected read-model foundations only. No database action creates an order, records a simulated execution, changes a Position, or calls an external system.
+
+Milestone 3 is **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE BLOCKED**. The additive Shadow migration creates `shadow_cycles` and `shadow_outcome_events`, four narrow Worker RPCs, strict versioned JSON validation, forced owner RLS and append-only protections. They are separate from legacy approval/execution records. Runtime and authenticated read-only pages are connected; genuine external providers, hosted provisioning and native acceptance remain unresolved. See [implementation](MILESTONE_3_IMPLEMENTATION.md) and [wire contract](SHADOW_WIRE_V1.md).
 
 All instants are `timestamptz`, all identifiers are UUIDs, and money, prices, percentages, and volume use PostgreSQL `numeric` with explicit finite-value checks. Owner-scoped relationships include `owner_id` in both the child and referenced key; account-bound relationships also carry `trading_account_id` through composite foreign keys.
 
@@ -33,8 +35,8 @@ The browser and Worker have no direct DML grant on protected operational tables.
 | `trading_modes`                 | Owner/account control-plane state            | default and only Milestone 1 mode `SHADOW`; positive resource version                                                                                                 |
 | `risk_policies`                 | Policy identity and active-version pointer   | active version must belong to the same policy and owner                                                                                                               |
 | `risk_policy_versions`          | Immutable conservative policy snapshot       | Demo/XAUUSD, maximum-permitted-volume value exactly `0.01`, one Position, Stop Loss required, prohibited strategy/model flags fixed false, bounded numeric risk rules |
-| `market_snapshots`              | Minimal immutable proposal input reference   | Foundation only; no market ingestion is implemented                                                                                                                   |
-| `feature_snapshots`             | Minimal immutable proposal input reference   | Owner/account/market provenance binding; no feature or strategy pipeline is implemented                                                                               |
+| `market_snapshots`              | Minimal immutable proposal input reference   | Foundation only; durable ingestion of the new market component's output is pending                                                                                    |
+| `feature_snapshots`             | Minimal immutable proposal input reference   | Owner/account/market provenance binding; durable integration of the new feature component and the strategy pipeline is pending                                        |
 | `trade_proposals`               | Version-bound Shadow proposal record         | Demo/XAUUSD, positive version, same-market feature provenance, spec/policy bindings, expiry after creation, price/volume/Stop Loss checks                             |
 | `risk_checks`                   | Immutable normalized proposal risk result    | canonical `pass`, `warn`, `fail`, or `na`; unique check key per proposal version                                                                                      |
 | `trade_decisions`               | User decision intent record                  | owner/proposal/version binding; created only through secured proposal actions                                                                                         |

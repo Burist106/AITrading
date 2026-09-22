@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { basename, extname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
@@ -27,11 +27,14 @@ const TEXT_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
 ]);
-// Exact hashes of two reviewed credential-shaped negative-test fixtures in
-// adapters.test.ts and domain-parity.json. Values are never allowlisted by path.
+// Exact hashes of reviewed credential-shaped negative-test fixtures. The last
+// two are the interpolated auth-test cookie header and discarded refresh-token
+// placeholder; values are never allowlisted by path or variable name.
 const REVIEWED_SYNTHETIC_FINGERPRINTS = new Set([
   "cfde27bb192610e928089ceaaef3936d5a8119d53f2d8b04d1ce2bcc55feeb13",
   "d714ed94567128fadf8f331a2295dfe7820a23e8c9b08d8eb17e46f3c76e1806",
+  "c25c3efc26f33fa679cbe1529666a6121100697ec05f9ec11aa6d421db548dd0",
+  "b44736326331f429d0303ece47f60dac1ffcfe1e2f53ab45f926467644423048",
 ]);
 
 function pattern(...parts) {
@@ -83,6 +86,7 @@ const SECRET_PATTERNS = [
   [
     "secret assignment",
     pattern(
+      "(?<![A-Za-z0-9])",
       "(?:MT5_(?:PASSWORD|LOGIN_PASSWORD)|SUPABASE_(?:SERVICE_ROLE|SECRET)_KEY|",
       "OPENAI_API_KEY|GITHUB_TOKEN|AWS_SECRET_ACCESS_KEY|LINE_CHANNEL_SECRET|",
       "(?:ACCESS|REFRESH)_TOKEN|COOKIE)\\s*[:=]\\s*[\"']?",
@@ -102,21 +106,40 @@ function git(root, args, options = {}) {
 function isText(buffer, path) {
   if (buffer.length > MAX_TEXT_BYTES || buffer.includes(0)) return false;
   const extension = extname(path).toLowerCase();
-  return TEXT_EXTENSIONS.has(extension) || !extension;
+  return (
+    TEXT_EXTENSIONS.has(extension) ||
+    !extension ||
+    /^\.env(?:\.|$)/u.test(basename(path))
+  );
 }
 
-export function enumerateTrackedTextFiles(root) {
-  const output = git(root, ["ls-files", "-z"], { encoding: "buffer" });
-  return output
-    .toString("utf8")
-    .split("\0")
-    .filter(Boolean)
-    .filter((path) => {
-      const absolute = resolve(root, path);
-      if (!existsSync(absolute)) return false;
-      return isText(readFileSync(absolute), path);
-    });
+export function enumerateRepositoryTextFiles(root) {
+  // Git ignore rules exclude local environments/profile ciphertext before any
+  // file contents are read. Tracked files remain in scope even if later ignored.
+  const output = git(
+    root,
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { encoding: "buffer" },
+  );
+  return [
+    ...new Set(output.toString("utf8").split("\0").filter(Boolean)),
+  ].filter((path) => {
+    const absolute = resolve(root, path);
+    if (!existsSync(absolute)) return false;
+    const metadata = lstatSync(absolute);
+    if (
+      !metadata.isFile() ||
+      metadata.size > MAX_TEXT_BYTES ||
+      (!TEXT_EXTENSIONS.has(extname(path).toLowerCase()) &&
+        !/^\.env(?:\.|$)/u.test(basename(path)))
+    )
+      return false;
+    return isText(readFileSync(absolute), path);
+  });
 }
+
+// Compatibility name; callers now receive all eligible repository source files.
+export const enumerateTrackedTextFiles = enumerateRepositoryTextFiles;
 
 export function scanText(content, reference) {
   const findings = [];
@@ -188,7 +211,7 @@ export function enumerateHistoryTextBlobs(root) {
 
 export function scanRepositorySecrets(root, { includeHistory = true } = {}) {
   const findings = [];
-  const currentFiles = enumerateTrackedTextFiles(root);
+  const currentFiles = enumerateRepositoryTextFiles(root);
   for (const path of currentFiles) {
     findings.push(
       ...scanText(readFileSync(resolve(root, path), "utf8"), `file:${path}`),
@@ -209,7 +232,12 @@ export function scanRepositorySecrets(root, { includeHistory = true } = {}) {
       );
     }
   }
-  return { findings, trackedFileCount: currentFiles.length, historyBlobCount };
+  return {
+    findings,
+    repositoryFileCount: currentFiles.length,
+    trackedFileCount: currentFiles.length,
+    historyBlobCount,
+  };
 }
 
 export function formatFinding(finding) {

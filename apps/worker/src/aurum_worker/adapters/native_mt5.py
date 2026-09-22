@@ -14,6 +14,7 @@ from aurum_worker.adapters.protocols import Mt5ReadPort
 from aurum_worker.models.mt5 import (
     AccountObservation,
     AccountTradeMode,
+    AccountVerificationState,
     ActiveOrderObservation,
     BrokerSymbolCandidate,
     BrokerSymbolObservation,
@@ -34,7 +35,15 @@ from aurum_worker.models.mt5 import (
     SymbolUsabilityState,
     TerminalObservation,
     TickFreshness,
+    TickTimeDiagnostic,
     Timeframe,
+)
+from aurum_worker.mt5_market_provider import provider_failure_detail
+from aurum_worker.mt5_market_time import (
+    PEPPERSTONE_POLICY,
+    UTC_POLICY,
+    decode_market_epoch,
+    encode_market_range,
 )
 from aurum_worker.mt5_safety import (
     account_fingerprint,
@@ -48,8 +57,16 @@ from aurum_worker.mt5_safety import (
     server_fingerprint,
     signed_decimal_from_native,
     specification_fingerprint,
+    timeframe_duration_seconds,
     utc_from_epoch,
     utc_from_epoch_milliseconds,
+    verify_account,
+)
+from aurum_worker.mt5_transaction_inventory import (
+    InventoryLookback,
+    RowInventory,
+    TransactionInventory,
+    summarize_rows,
 )
 
 ADAPTER_VERSION = "aurum-mt5-read-v1"
@@ -370,6 +387,18 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     1: AccountTradeMode.CONTEST,
                     2: AccountTradeMode.REAL,
                 }.get(mode_code, AccountTradeMode.UNKNOWN)
+                if (
+                    self._config.market_time_policy != UTC_POLICY
+                    and mode is AccountTradeMode.DEMO
+                ):
+                    # Public provider guard is additional to manual account/spec
+                    # binding, never a substitute for it or an automatic selector.
+                    provider_detail = provider_failure_detail(_field(raw, "company"))
+                    if provider_detail is not None:
+                        raise self._failure(
+                            Mt5ReasonCode.ACCOUNT_BINDING_MISMATCH,
+                            provider_detail,
+                        )
                 return AccountObservation(
                     observed_at=self._clock(),
                     source="mt5",
@@ -559,11 +588,80 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     "Broker symbol specification is incomplete or invalid.",
                 ) from error
 
+    def get_tick_time_diagnostic(
+        self, broker_symbol: str, *, trace_id: str
+    ) -> TickTimeDiagnostic:
+        """Inspect one native tick's time fields without changing runtime policy.
+
+        This separate local diagnostic capability is not part of the polling or
+        persistence port. It requires an already confirmed bound Demo symbol.
+        """
+        with self._process_lock:
+            module = self._require_connected()
+            if self._config.broker_symbol != broker_symbol:
+                raise self._failure(
+                    Mt5ReasonCode.SYMBOL_NOT_CONFIGURED,
+                    "Diagnostic requires the explicitly configured broker symbol.",
+                )
+            account = self.get_account_info(trace_id=trace_id)
+            verification = verify_account(
+                account, self._config.expected_account_fingerprint
+            )
+            if verification.state is not AccountVerificationState.VERIFIED_DEMO_BOUND:
+                raise self._failure(
+                    verification.reason_code,
+                    "Diagnostic Demo binding was not satisfied.",
+                )
+            confirmed = self._config.smoke_confirmed_specification_fingerprint
+            if confirmed is None:
+                raise self._failure(
+                    Mt5ReasonCode.SYMBOL_SPEC_CONFIRMATION_REQUIRED,
+                    "Diagnostic requires a separately confirmed specification.",
+                )
+            specification = self.get_symbol_specification(
+                broker_symbol, trace_id=trace_id
+            )
+            if specification.usability_state is not SymbolUsabilityState.USABLE:
+                raise self._failure(
+                    specification.unusable_reason
+                    or Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE,
+                    "Diagnostic symbol is not usable.",
+                )
+            if specification.specification_fingerprint != confirmed:
+                raise self._failure(
+                    Mt5ReasonCode.SYMBOL_SPEC_CHANGED,
+                    "Diagnostic specification differs from prior confirmation.",
+                )
+            raw = module.symbol_info_tick(broker_symbol)
+            if raw is None:
+                raise self._failure(
+                    Mt5ReasonCode.TICK_UNAVAILABLE, "Diagnostic tick is unavailable."
+                )
+            try:
+                evidence = TickTimeDiagnostic(
+                    observed_at=self._clock(),
+                    native_time=cast(int, _required(raw, "time")),
+                    native_time_msc=cast(int | None, _field(raw, "time_msc")),
+                )
+                # Validate representability, but do not rewrite either native value.
+                utc_from_epoch(evidence.native_time)
+                if evidence.native_time_msc:
+                    utc_from_epoch_milliseconds(evidence.native_time_msc)
+                return evidence
+            except (TypeError, ValueError) as error:
+                raise self._failure(
+                    Mt5ReasonCode.TICK_INVALID,
+                    "Diagnostic timestamp fields are invalid or unavailable.",
+                ) from error
+
     def get_latest_tick(
         self, broker_symbol: str, *, trace_id: str
     ) -> LatestTickObservation:
         with self._process_lock:
             module = self._require_connected()
+            self._check_market_time_binding(
+                broker_symbol, trace_id, Mt5ReasonCode.TICK_INVALID
+            )
             raw = module.symbol_info_tick(broker_symbol)
             symbol = module.symbol_info(broker_symbol)
             if raw is None:
@@ -579,12 +677,35 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     raise ValueError("ask below bid")
                 point = decimal_from_native(_required(symbol, "point"), positive=True)
                 time_msc = _field(raw, "time_msc")
-                tick_at = (
-                    utc_from_epoch_milliseconds(int(cast(int | str, time_msc)))
-                    if time_msc
-                    else utc_from_epoch(cast(int | float, _required(raw, "time")))
+                # Revalidate after all market reads, before the final freshness
+                # clock. Slow binding checks must not return a cached LIVE state.
+                self._check_market_time_binding(
+                    broker_symbol, trace_id, Mt5ReasonCode.TICK_INVALID
                 )
                 now = self._clock()
+                if self._config.market_time_policy == UTC_POLICY:
+                    tick_at = (
+                        utc_from_epoch_milliseconds(int(cast(int | str, time_msc)))
+                        if time_msc
+                        else utc_from_epoch(cast(int | float, _required(raw, "time")))
+                    )
+                else:
+                    seconds = _required(raw, "time")
+                    if type(seconds) is not int or (
+                        time_msc is not None
+                        and (
+                            type(time_msc) is not int
+                            or time_msc < 0
+                            or (time_msc != 0 and time_msc // 1000 != seconds)
+                        )
+                    ):
+                        raise ValueError("Inconsistent native market timestamp.")
+                    tick_at = decode_market_epoch(
+                        time_msc if time_msc else seconds,
+                        policy=self._config.market_time_policy,
+                        observed_at=now,
+                        milliseconds=bool(time_msc),
+                    )
                 signed_age = (now - tick_at).total_seconds()
                 if signed_age < -self._config.max_clock_drift_seconds:
                     freshness = TickFreshness.FUTURE_INVALID
@@ -599,10 +720,10 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     freshness = TickFreshness.LIVE
                     age = decimal_from_native(max(signed_age, 0))
                 spread = ask - bid
-                return LatestTickObservation(
+                observation = LatestTickObservation(
                     observed_at=now,
                     source="mt5",
-                    adapter_version=ADAPTER_VERSION,
+                    adapter_version=self._market_adapter_version(),
                     trace_id=trace_id,
                     symbol=broker_symbol,
                     bid=bid,
@@ -613,10 +734,132 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     age_seconds=age,
                     freshness=freshness,
                 )
+                return observation
             except (TypeError, ValueError) as error:
                 raise self._failure(
                     Mt5ReasonCode.TICK_INVALID,
                     "Latest tick could not be normalized safely.",
+                ) from error
+
+    def _market_adapter_version(self) -> str:
+        if self._config.market_time_policy == UTC_POLICY:
+            return ADAPTER_VERSION
+        return f"{ADAPTER_VERSION}:{self._config.market_time_policy}"
+
+    def _check_market_time_binding(
+        self, symbol: str, trace_id: str, reason: Mt5ReasonCode
+    ) -> None:
+        if self._config.market_time_policy == UTC_POLICY:
+            return
+        if (
+            self._config.max_tick_age_seconds != 10
+            or self._config.max_clock_drift_seconds != 30
+        ):
+            raise self._failure(reason, "Market time safety limits must remain fixed.")
+        try:
+            # Also reject expired capture coverage before issuing a market read.
+            now = self._clock()
+            encode_market_range(
+                now, now, policy=self._config.market_time_policy, observed_at=now
+            )
+        except ValueError as error:
+            raise self._failure(
+                reason, "Market time policy coverage is unavailable."
+            ) from error
+        if symbol != self._config.broker_symbol:
+            raise self._failure(
+                Mt5ReasonCode.SYMBOL_NOT_CONFIGURED,
+                "Time policy requires the configured symbol.",
+            )
+        self.get_terminal_info(trace_id=trace_id)
+        account = self.get_account_info(trace_id=trace_id)
+        verified = verify_account(account, self._config.expected_account_fingerprint)
+        if verified.state is not AccountVerificationState.VERIFIED_DEMO_BOUND:
+            raise self._failure(
+                verified.reason_code, "Time policy Demo binding failed."
+            )
+        confirmed = self._config.smoke_confirmed_specification_fingerprint
+        if confirmed is None:
+            raise self._failure(
+                Mt5ReasonCode.SYMBOL_SPEC_CONFIRMATION_REQUIRED,
+                "Time policy needs a separately confirmed specification.",
+            )
+        specification = self.get_symbol_specification(symbol, trace_id=trace_id)
+        if specification.usability_state is not SymbolUsabilityState.USABLE:
+            raise self._failure(
+                specification.unusable_reason or Mt5ReasonCode.SYMBOL_SPEC_INCOMPLETE,
+                "Time policy symbol is unusable.",
+            )
+        if specification.specification_fingerprint != confirmed:
+            raise self._failure(
+                Mt5ReasonCode.SYMBOL_SPEC_CHANGED, "Time policy specification changed."
+            )
+
+    def _require_transaction_time_contract(self) -> None:
+        if self._config.market_time_policy != UTC_POLICY:
+            raise self._failure(
+                Mt5ReasonCode.RECONCILIATION_INCOMPLETE,
+                "Selected market-only time policy does not establish transaction time.",
+            )
+
+    def inspect_transaction_inventory(
+        self, *, trace_id: str, lookback_days: InventoryLookback = 7
+    ) -> TransactionInventory:
+        """Diagnostic only: no UTC interpretation, runtime reconciliation or writes.
+
+        The history envelope includes both hypotheses for a bounded interval.
+        Its shifted upper bound is a transport label, NOT a future UTC event.
+        Counts cannot prove completeness, timezone, or query endpoint semantics.
+        """
+        if type(lookback_days) is not int or lookback_days not in {7, 30}:
+            raise self._failure(
+                Mt5ReasonCode.RECONCILIATION_INCOMPLETE,
+                "Inventory lookback must be exactly seven or thirty days.",
+            )
+        if self._config.market_time_policy != PEPPERSTONE_POLICY:
+            raise self._failure(
+                Mt5ReasonCode.RECONCILIATION_INCOMPLETE,
+                "Inventory needs the explicitly selected Demo source policy.",
+            )
+        with self._process_lock:
+            module = self._require_connected()
+            symbol = self._config.broker_symbol or ""
+            reason = Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+
+            def read(kind: str, operation: Callable[[], object]) -> RowInventory:
+                self._check_market_time_binding(symbol, trace_id, reason)
+                rows = operation()
+                self._check_market_time_binding(symbol, trace_id, reason)
+                return summarize_rows(rows, symbol=symbol, kind=kind, field=_field)
+
+            try:
+                self._check_market_time_binding(symbol, trace_id, reason)
+                now = self._clock()
+                start = now - timedelta(days=lookback_days)
+                # Validate the whole hypothetical event window against coverage.
+                _, end = encode_market_range(
+                    start, now, policy=PEPPERSTONE_POLICY, observed_at=now
+                )
+                positions = read("positions", module.positions_get)
+                orders = read("active_orders", module.orders_get)
+                order_history = read(
+                    "historical_orders", lambda: module.history_orders_get(start, end)
+                )
+                deals = read(
+                    "historical_deals", lambda: module.history_deals_get(start, end)
+                )
+                return TransactionInventory(
+                    lookback_days=lookback_days,
+                    positions=positions,
+                    active_orders=orders,
+                    historical_orders=order_history,
+                    historical_deals=deals,
+                )
+            except Mt5ReadFailure:
+                raise
+            except Exception as error:
+                raise self._failure(
+                    reason, "Transaction inventory unavailable."
                 ) from error
 
     def _timeframe_code(self, module: NativeMt5Module, timeframe: Timeframe) -> int:
@@ -655,11 +898,26 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
             )
         with self._process_lock:
             module = self._require_connected()
+            self._check_market_time_binding(
+                broker_symbol, trace_id, Mt5ReasonCode.CANDLE_DATA_INVALID
+            )
             code = self._timeframe_code(module, timeframe)
             if request.range_start and request.range_end:
-                raw_rates = module.copy_rates_range(
-                    broker_symbol, code, request.range_start, request.range_end
-                )
+                start, end = request.range_start, request.range_end
+                try:
+                    if self._config.market_time_policy != UTC_POLICY:
+                        start, end = encode_market_range(
+                            request.range_start,
+                            request.range_end,
+                            policy=self._config.market_time_policy,
+                            observed_at=self._clock(),
+                        )
+                except ValueError as error:
+                    raise self._failure(
+                        Mt5ReasonCode.CANDLE_DATA_INVALID,
+                        "Candle request has no supported time mapping.",
+                    ) from error
+                raw_rates = module.copy_rates_range(broker_symbol, code, start, end)
             else:
                 raw_rates = module.copy_rates_from_pos(
                     broker_symbol, code, request.start_position, request.count
@@ -689,15 +947,34 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                     for row in rows
                 )
                 CandleSeries(candles=normalized)
+                if (
+                    self._config.market_time_policy != UTC_POLICY
+                    and (
+                        request.range_start is not None
+                        and request.range_end is not None
+                    )
+                    and any(
+                        candle.open_at < request.range_start
+                        or candle.open_at > request.range_end
+                        for candle in normalized
+                    )
+                ):
+                    raise ValueError(
+                        "Candle result falls outside the requested interval."
+                    )
                 candles = (
                     normalized
                     if request.include_current
                     else tuple(candle for candle in normalized if candle.is_complete)
                 )
-                return CandleSeries(
+                result = CandleSeries(
                     candles=candles,
                     gaps=candle_gaps(candles, timeframe),
                 )
+                self._check_market_time_binding(
+                    broker_symbol, trace_id, Mt5ReasonCode.CANDLE_DATA_INVALID
+                )
+                return result
             except (OSError, OverflowError, TypeError, ValueError) as error:
                 raise self._failure(
                     Mt5ReasonCode.CANDLE_DATA_INVALID,
@@ -713,11 +990,24 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
         trace_id: str,
         observed_at: datetime,
     ) -> CandleObservation:
-        open_at = utc_from_epoch(cast(int | float, _required(row, "time")))
+        if self._config.market_time_policy == UTC_POLICY:
+            open_at = utc_from_epoch(cast(int | float, _required(row, "time")))
+        else:
+            open_at = decode_market_epoch(
+                cast(int | float, _required(row, "time")),
+                policy=self._config.market_time_policy,
+                observed_at=observed_at,
+            )
+            encode_market_range(
+                open_at,
+                open_at + timedelta(seconds=timeframe_duration_seconds(timeframe)),
+                policy=self._config.market_time_policy,
+                observed_at=observed_at,
+            )
         return CandleObservation(
             observed_at=observed_at,
             source="mt5",
-            adapter_version=ADAPTER_VERSION,
+            adapter_version=self._market_adapter_version(),
             trace_id=trace_id,
             symbol=broker_symbol,
             timeframe=timeframe,
@@ -733,6 +1023,7 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
         )
 
     def get_open_positions(self, *, trace_id: str) -> list[OpenPositionObservation]:
+        self._require_transaction_time_contract()
         with self._process_lock:
             module = self._require_connected()
             rows = module.positions_get()
@@ -787,6 +1078,7 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
                 ) from error
 
     def get_active_orders(self, *, trace_id: str) -> list[ActiveOrderObservation]:
+        self._require_transaction_time_contract()
         with self._process_lock:
             module = self._require_connected()
             rows = module.orders_get()
@@ -832,6 +1124,7 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
     def get_order_history(
         self, request: HistoryRequest, *, trace_id: str
     ) -> list[HistoricalOrderObservation]:
+        self._require_transaction_time_contract()
         with self._process_lock:
             module = self._require_connected()
             rows = module.history_orders_get(request.start_at, request.end_at)
@@ -889,6 +1182,7 @@ class MetaTrader5ReadAdapter(Mt5ReadPort):
     def get_deal_history(
         self, request: HistoryRequest, *, trace_id: str
     ) -> list[HistoricalDealObservation]:
+        self._require_transaction_time_contract()
         with self._process_lock:
             module = self._require_connected()
             rows = module.history_deals_get(request.start_at, request.end_at)

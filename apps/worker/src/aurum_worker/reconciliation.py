@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -202,8 +202,8 @@ class ReadOnlyReconciliationService:
             if failure.error.reason_code is not Mt5ReasonCode.HISTORY_QUERY_FAILED:
                 raise
             return [], self._failed_history_evidence("orders", request)
-        times = [row.setup_at for row in rows]
-        return rows, self._successful_history_evidence("orders", request, times)
+        times = [row.completed_at for row in rows]
+        return rows, self._returned_history_evidence("orders", request, times)
 
     def _deal_history(
         self, request: HistoryRequest, trace_id: str
@@ -215,30 +215,37 @@ class ReadOnlyReconciliationService:
                 raise
             return [], self._failed_history_evidence("deals", request)
         times = [row.occurred_at for row in rows]
-        return rows, self._successful_history_evidence("deals", request, times)
+        return rows, self._returned_history_evidence("deals", request, times)
 
-    def _successful_history_evidence(
-        self, history_kind: str, request: HistoryRequest, timestamps: list[datetime]
+    def _returned_history_evidence(
+        self,
+        history_kind: str,
+        request: HistoryRequest,
+        timestamps: Sequence[datetime | None],
     ) -> HistoryQueryEvidence:
-        is_empty = not timestamps
+        known_times = [timestamp for timestamp in timestamps if timestamp is not None]
+        if not timestamps:
+            result_state = HistoryQueryResultState.EMPTY_VALID_RESULT
+            reason_code = Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT
+        elif len(known_times) != len(timestamps) or any(
+            timestamp < request.start_at or timestamp > request.end_at
+            for timestamp in known_times
+        ):
+            result_state = HistoryQueryResultState.WINDOW_INCOMPLETE
+            reason_code = Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+        else:
+            result_state = HistoryQueryResultState.QUERY_SUCCEEDED
+            reason_code = Mt5ReasonCode.HEALTHY
         return HistoryQueryEvidence(
             history_kind="orders" if history_kind == "orders" else "deals",
             requested_start_at=request.start_at,
             requested_end_at=request.end_at,
             query_completed_at=self._clock(),
             returned_count=len(timestamps),
-            earliest_returned_at=min(timestamps) if timestamps else None,
-            latest_returned_at=max(timestamps) if timestamps else None,
-            result_state=(
-                HistoryQueryResultState.EMPTY_VALID_RESULT
-                if is_empty
-                else HistoryQueryResultState.QUERY_SUCCEEDED
-            ),
-            reason_code=(
-                Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT
-                if is_empty
-                else Mt5ReasonCode.HEALTHY
-            ),
+            earliest_returned_at=min(known_times) if known_times else None,
+            latest_returned_at=max(known_times) if known_times else None,
+            result_state=result_state,
+            reason_code=reason_code,
         )
 
     def _failed_history_evidence(

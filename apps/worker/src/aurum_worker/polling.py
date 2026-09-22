@@ -14,10 +14,12 @@ from aurum_worker.adapters.protocols import (
     Mt5ReadPort,
 )
 from aurum_worker.models.mt5 import (
+    AccountObservation,
     AccountVerificationState,
     ComponentHeartbeat,
     ComponentHeartbeatState,
     HealthState,
+    LatestTickObservation,
     Mt5ComponentCode,
     Mt5ReadFailure,
     Mt5ReasonCode,
@@ -116,6 +118,10 @@ class ReadOnlyPollingService:
         monotonic_clock: Callable[[], float] | None = None,
         jitter: Callable[[int], Decimal] | None = None,
         trace_factory: Callable[[], str] | None = None,
+        on_full_cycle: Callable[[ReconciliationResult, str], None] | None = None,
+        on_tick: Callable[[LatestTickObservation, AccountObservation], None]
+        | None = None,
+        on_failure: Callable[[Mt5ReadFailure, str], None] | None = None,
     ) -> None:
         self._adapter = adapter
         self._persistence = persistence
@@ -125,6 +131,9 @@ class ReadOnlyPollingService:
         self._monotonic = monotonic_clock or monotonic
         self._jitter = jitter or (lambda _attempt: Decimal("0"))
         self._trace_factory = trace_factory or (lambda: str(uuid4()))
+        self._on_full_cycle = on_full_cycle
+        self._on_tick = on_tick
+        self._on_failure = on_failure
         self._cancel = Event()
         self._lock = RLock()
         self._thread: Thread | None = None
@@ -453,6 +462,8 @@ class ReadOnlyPollingService:
         result = self._reconciliation.run(trace_id=trace_id)
         self._accept_full_result(result)
         self._emit_component_heartbeats(trace_id=trace_id)
+        if self._on_full_cycle is not None:
+            self._on_full_cycle(result, trace_id)
         self._schedule_after_full()
         return result
 
@@ -579,6 +590,8 @@ class ReadOnlyPollingService:
                     self._reconciliation_required = True
                 accepted = True
         self._emit_component_heartbeats(trace_id=trace_id)
+        if self._on_tick is not None:
+            self._on_tick(tick, account)
         return accepted
 
     def run_position_once(self, *, trace_id: str | None = None) -> bool:
@@ -685,6 +698,12 @@ class ReadOnlyPollingService:
             self._attempt += 1
             self._next_reconnect = self._backoff()
         self._record_failure(failure, trace_id)
+        if self._on_failure is not None:
+            try:
+                self._on_failure(failure, trace_id)
+            except Exception:
+                # Reporting failure must not recurse or erase failed liveness.
+                pass
 
     def _wait_for_due_cycle(self) -> bool:
         now = self._monotonic()

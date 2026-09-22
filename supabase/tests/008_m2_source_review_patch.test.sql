@@ -7,7 +7,7 @@ grant usage on schema extensions to aurum_function_owner;
 grant execute on all functions in schema extensions to aurum_function_owner;
 set local search_path = public, extensions;
 
-select plan(71);
+select plan(253);
 
 select has_table(
   'public', 'mt5_history_query_evidence',
@@ -842,6 +842,205 @@ select ok(
   ),
   'patch exposes no production symbol-confirmation action'
 );
+
+-- M3 history-bound parity applies to both Orders and Deals, retaining exact
+-- microsecond boundaries and diagnostic metadata for incomplete windows.
+set local role aurum_function_owner;
+select is(
+  private.m2_history_evidence_valid(
+    pg_catalog.jsonb_build_object(
+      'history_kind', kind.name,
+      'requested_start_at', '2026-09-22T01:00:00.000001Z',
+      'requested_end_at', '2026-09-22T02:00:00.000001Z',
+      'query_completed_at', '2026-09-22T02:00:01Z',
+      'returned_count', cases.returned_count,
+      'earliest_returned_at', cases.earliest,
+      'latest_returned_at', cases.latest,
+      'result_state', cases.result_state,
+      'reason_code', cases.reason_code
+    ),
+    kind.name
+  ),
+  cases.accepted,
+  kind.name || ': ' || cases.description
+)
+from (values ('orders'), ('deals')) as kind(name)
+cross join (values
+  ('2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    2, 'query_succeeded', 'HEALTHY', true, 'both requested endpoints are inclusive'),
+  ('2026-09-22T01:00:00.000001Z', '2026-09-22T01:00:00.000001Z',
+    1, 'query_succeeded', 'HEALTHY', true, 'event at the exact start is valid'),
+  ('2026-09-22T02:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    1, 'query_succeeded', 'HEALTHY', true, 'event at the exact end is valid'),
+  ('2026-09-22T01:00:00.000002Z', '2026-09-22T02:00:00.000000Z',
+    2, 'query_succeeded', 'HEALTHY', true, 'events one microsecond inside are valid'),
+  ('2026-09-22T01:00:00.000000Z', '2026-09-22T02:00:00.000001Z',
+    2, 'query_succeeded', 'HEALTHY', false, 'one microsecond before start blocks success'),
+  ('2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000002Z',
+    2, 'query_succeeded', 'HEALTHY', false, 'one microsecond after end blocks success'),
+  ('2026-09-22T01:00:00.000000Z', '2026-09-22T02:00:00.000002Z',
+    2, 'window_incomplete', 'HISTORY_WINDOW_INCOMPLETE', true,
+    'incomplete evidence retains both out-of-window event boundaries'),
+  (null, null, 0, 'empty_valid_result', 'HISTORY_EMPTY_VALID_RESULT', true,
+    'explicit successful empty evidence still has no event boundaries')
+) as cases(earliest, latest, returned_count, result_state, reason_code, accepted, description);
+reset role;
+
+select ok(
+  (
+    select pg_catalog.pg_get_userbyid(procedure.proowner)
+    from pg_catalog.pg_proc as procedure
+    where procedure.oid = 'private.m2_history_evidence_valid(jsonb,text)'::regprocedure
+  ) = 'aurum_function_owner'
+  and not has_function_privilege(
+    'public', 'private.m2_history_evidence_valid(jsonb,text)', 'execute'
+  )
+  and not has_function_privilege(
+    'anon', 'private.m2_history_evidence_valid(jsonb,text)', 'execute'
+  )
+  and not has_function_privilege(
+    'authenticated', 'private.m2_history_evidence_valid(jsonb,text)', 'execute'
+  )
+  and not has_function_privilege(
+    'aurum_worker', 'private.m2_history_evidence_valid(jsonb,text)', 'execute'
+  ),
+  'bounds hardening preserves the private validator owner and caller restrictions'
+);
+
+insert into public.mt5_reconciliation_runs (
+  id, owner_id, worker_id, status, reason_code, report_hash, trace_id, started_at
+) values (
+  '00000000-0000-4000-8000-000000008390',
+  '00000000-0000-4000-8000-000000000201', 'worker-history-bounds', 'running',
+  'HISTORY_WINDOW_INCOMPLETE', pg_catalog.repeat('0', 32), 'history-bounds-test',
+  '2026-09-22T02:00:00.000001Z'
+);
+
+select throws_ok(
+  $$insert into public.mt5_history_query_evidence (
+    owner_id, reconciliation_id, history_kind, requested_start_at,
+    requested_end_at, query_completed_at, returned_count,
+    earliest_returned_at, latest_returned_at, result_state, reason_code
+  ) values (
+    '00000000-0000-4000-8000-000000000201',
+    '00000000-0000-4000-8000-000000008390', 'orders',
+    '2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    '2026-09-22T02:00:01Z', 2,
+    '2026-09-22T01:00:00.000000Z', '2026-09-22T02:00:00.000001Z',
+    'query_succeeded', 'HEALTHY'
+  )$$,
+  '23514',
+  'new row for relation "mt5_history_query_evidence" violates check constraint "mt5_history_query_evidence_success_bounds_check"',
+  'table rejects success one microsecond before the requested start'
+);
+select throws_ok(
+  $$insert into public.mt5_history_query_evidence (
+    owner_id, reconciliation_id, history_kind, requested_start_at,
+    requested_end_at, query_completed_at, returned_count,
+    earliest_returned_at, latest_returned_at, result_state, reason_code
+  ) values (
+    '00000000-0000-4000-8000-000000000201',
+    '00000000-0000-4000-8000-000000008390', 'orders',
+    '2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    '2026-09-22T02:00:01Z', 2,
+    '2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000002Z',
+    'query_succeeded', 'HEALTHY'
+  )$$,
+  '23514',
+  'new row for relation "mt5_history_query_evidence" violates check constraint "mt5_history_query_evidence_success_bounds_check"',
+  'table rejects success one microsecond after the requested end'
+);
+select lives_ok(
+  $$insert into public.mt5_history_query_evidence (
+    owner_id, reconciliation_id, history_kind, requested_start_at,
+    requested_end_at, query_completed_at, returned_count,
+    earliest_returned_at, latest_returned_at, result_state, reason_code
+  ) values (
+    '00000000-0000-4000-8000-000000000201',
+    '00000000-0000-4000-8000-000000008390', 'orders',
+    '2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    '2026-09-22T02:00:01Z', 2,
+    '2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    'query_succeeded', 'HEALTHY'
+  )$$,
+  'table accepts successful evidence exactly at both requested endpoints'
+);
+select lives_ok(
+  $$insert into public.mt5_history_query_evidence (
+    owner_id, reconciliation_id, history_kind, requested_start_at,
+    requested_end_at, query_completed_at, returned_count,
+    earliest_returned_at, latest_returned_at, result_state, reason_code
+  ) values (
+    '00000000-0000-4000-8000-000000000201',
+    '00000000-0000-4000-8000-000000008390', 'deals',
+    '2026-09-22T01:00:00.000001Z', '2026-09-22T02:00:00.000001Z',
+    '2026-09-22T02:00:01Z', 2,
+    '2026-09-22T01:00:00.000000Z', '2026-09-22T02:00:00.000002Z',
+    'window_incomplete', 'HISTORY_WINDOW_INCOMPLETE'
+  )$$,
+  'table accepts out-of-window diagnostic events marked incomplete'
+);
+select results_eq(
+  $$select earliest_returned_at, latest_returned_at, result_state
+    from public.mt5_history_query_evidence
+    where reconciliation_id = '00000000-0000-4000-8000-000000008390'
+      and history_kind = 'deals'$$,
+  $$values (
+    '2026-09-22T01:00:00.000000Z'::timestamptz,
+    '2026-09-22T02:00:00.000002Z'::timestamptz,
+    'window_incomplete'
+  )$$,
+  'incomplete evidence preserves exact out-of-window metadata without clipping'
+);
+
+-- Match historyTimestampPrecisionCases from the shared JSON corpus. Every
+-- timestamp field is checked before the database can round submicroseconds.
+set local role aurum_function_owner;
+select is(
+  private.m2_history_evidence_valid(
+    pg_catalog.jsonb_build_object(
+      'history_kind', kind.name,
+      'requested_start_at', '2026-08-23T00:00:00Z',
+      'requested_end_at', '2026-08-30T00:00:00Z',
+      'query_completed_at', '2026-09-01T00:00:00Z',
+      'returned_count', 2,
+      'earliest_returned_at', '2026-08-26T00:00:00Z',
+      'latest_returned_at', '2026-08-28T00:00:00Z',
+      'result_state', 'query_succeeded',
+      'reason_code', 'HEALTHY'
+    ) || pg_catalog.jsonb_build_object(field.name, field.date_text || cases.suffix),
+    kind.name
+  ),
+  cases.accepted,
+  kind.name || ': raw precision for ' || field.name || ' with ' || cases.suffix
+)
+from (values ('orders'), ('deals')) as kind(name)
+cross join (values
+  ('requested_start_at', '2026-08-23T00:00:00'),
+  ('requested_end_at', '2026-08-30T00:00:00'),
+  ('query_completed_at', '2026-09-01T00:00:00'),
+  ('earliest_returned_at', '2026-08-26T00:00:00'),
+  ('latest_returned_at', '2026-08-28T00:00:00')
+) as field(name, date_text)
+cross join (values
+  ('Z', true),
+  ('.1Z', true),
+  ('.12Z', true),
+  ('.123Z', true),
+  ('.1234Z', true),
+  ('.12345Z', true),
+  ('.123456Z', true),
+  ('+07:00', true),
+  ('-04:00', true),
+  ('.123456+07:00', true),
+  ('.123456-04:00', true),
+  ('.0000001Z', false),
+  ('.0000000Z', false),
+  ('.1234560Z', false),
+  ('.1234567+07:00', false),
+  ('.1234567-04:00', false)
+) as cases(suffix, accepted);
+reset role;
 
 select * from finish();
 rollback;

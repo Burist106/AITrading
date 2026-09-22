@@ -59,6 +59,66 @@ PARITY_PATH = (
 )
 
 
+@pytest.mark.parametrize(
+    "case", json.loads(PARITY_PATH.read_text(encoding="utf-8"))["historyBoundaryCases"]
+)
+def test_history_window_matches_typescript_corpus(case: dict[str, object]) -> None:
+    payload = {
+        "history_kind": "orders",
+        "requested_start_at": "2026-08-27T00:00:00Z",
+        "requested_end_at": "2026-08-28T00:00:00Z",
+        "query_completed_at": "2026-08-28T00:00:01Z",
+        "returned_count": 1,
+        "earliest_returned_at": case["eventAt"],
+        "latest_returned_at": case["eventAt"],
+        "result_state": "query_succeeded",
+        "reason_code": "HEALTHY",
+    }
+    if case["valid"]:
+        HistoryQueryEvidence.model_validate_json(json.dumps(payload))
+    else:
+        with pytest.raises(ValidationError):
+            HistoryQueryEvidence.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("field", "date"),
+    [
+        ("requested_start_at", "2026-08-23T00:00:00"),
+        ("requested_end_at", "2026-08-30T00:00:00"),
+        ("query_completed_at", "2026-09-01T00:00:00"),
+        ("earliest_returned_at", "2026-08-26T00:00:00"),
+        ("latest_returned_at", "2026-08-28T00:00:00"),
+    ],
+)
+@pytest.mark.parametrize(
+    "case",
+    json.loads(PARITY_PATH.read_text(encoding="utf-8"))[
+        "historyTimestampPrecisionCases"
+    ],
+)
+def test_history_raw_timestamp_precision_matches_typescript_corpus(
+    field: str, date: str, case: dict[str, object]
+) -> None:
+    payload = {
+        "history_kind": "orders",
+        "requested_start_at": "2026-08-23T00:00:00Z",
+        "requested_end_at": "2026-08-30T00:00:00Z",
+        "query_completed_at": "2026-09-01T00:00:00Z",
+        "returned_count": 2,
+        "earliest_returned_at": "2026-08-26T00:00:00Z",
+        "latest_returned_at": "2026-08-28T00:00:00Z",
+        "result_state": "query_succeeded",
+        "reason_code": "HEALTHY",
+        field: f"{date}{case['suffix']}",
+    }
+    if case["valid"]:
+        HistoryQueryEvidence.model_validate_json(json.dumps(payload))
+    else:
+        with pytest.raises(ValidationError):
+            HistoryQueryEvidence.model_validate_json(json.dumps(payload))
+
+
 def test_configuration_reads_only_local_readonly_settings() -> None:
     config = Mt5WorkerConfig.from_environ(
         {
@@ -581,6 +641,44 @@ def test_empty_and_non_empty_history_success_use_distinct_reasons() -> None:
             result_state=HistoryQueryResultState.EMPTY_VALID_RESULT,
             reason_code=Mt5ReasonCode.HEALTHY,
         )
+
+
+@pytest.mark.parametrize(
+    "returned_at",
+    [NOW - timedelta(hours=1, microseconds=1), NOW + timedelta(microseconds=1)],
+)
+def test_successful_history_evidence_rejects_events_outside_requested_window(
+    returned_at: datetime,
+) -> None:
+    with pytest.raises(ValidationError):
+        HistoryQueryEvidence(
+            history_kind="orders",
+            requested_start_at=NOW - timedelta(hours=1),
+            requested_end_at=NOW,
+            query_completed_at=NOW,
+            returned_count=1,
+            earliest_returned_at=returned_at,
+            latest_returned_at=returned_at,
+            result_state=HistoryQueryResultState.QUERY_SUCCEEDED,
+            reason_code=Mt5ReasonCode.HEALTHY,
+        )
+
+
+def test_history_evidence_accepts_inclusive_requested_endpoints() -> None:
+    evidence = HistoryQueryEvidence(
+        history_kind="deals",
+        requested_start_at=NOW - timedelta(hours=1),
+        requested_end_at=NOW,
+        query_completed_at=NOW,
+        returned_count=2,
+        earliest_returned_at=NOW - timedelta(hours=1),
+        latest_returned_at=NOW,
+        result_state=HistoryQueryResultState.QUERY_SUCCEEDED,
+        reason_code=Mt5ReasonCode.HEALTHY,
+    )
+
+    assert evidence.earliest_returned_at == evidence.requested_start_at
+    assert evidence.latest_returned_at == evidence.requested_end_at
 
 
 def _matched_reconciliation_report() -> ReconciliationReport:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -15,8 +16,12 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    ValidationInfo,
+    field_validator,
     model_validator,
 )
+
+from aurum_worker.mt5_market_time import UTC_POLICY, MarketTimePolicy
 
 DecimalValue = Annotated[Decimal, Field(allow_inf_nan=False)]
 PositiveDecimal = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
@@ -238,6 +243,7 @@ class HistoryQueryResultState(StrEnum):
 
 
 class Mt5WorkerConfig(Mt5Model):
+    market_time_policy: MarketTimePolicy = UTC_POLICY
     terminal_path: Path | None = None
     broker_symbol: str | None = None
     expected_account_fingerprint: str | None = None
@@ -260,6 +266,20 @@ class Mt5WorkerConfig(Mt5Model):
         Decimal, Field(ge=Decimal("1"), le=Decimal("300"))
     ] = Decimal("60")
     readonly_smoke: bool = False
+
+    @model_validator(mode="after")
+    def validate_market_time_policy(self) -> Self:
+        if self.market_time_policy != UTC_POLICY and (
+            not self.broker_symbol
+            or not self.expected_account_fingerprint
+            or not self.smoke_confirmed_specification_fingerprint
+            or self.max_tick_age_seconds != 10
+            or self.max_clock_drift_seconds != 30
+        ):
+            raise ValueError(
+                "Market time policy requires confirmed bindings and limits."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_heartbeat_cadence(self) -> Self:
@@ -387,6 +407,14 @@ class BrokerSymbolObservation(ObservationModel):
         if self.usability_state is SymbolUsabilityState.USABLE and self.unusable_reason:
             raise ValueError("usable symbol cannot have an unusable reason")
         return self
+
+
+class TickTimeDiagnostic(Mt5Model):
+    """Local-only native time evidence; never a persisted market observation."""
+
+    observed_at: AwareDatetime
+    native_time: Annotated[int, Field(gt=0)]
+    native_time_msc: Annotated[int, Field(ge=0)] | None
 
 
 class LatestTickObservation(ObservationModel):
@@ -558,6 +586,39 @@ class HistoryQueryEvidence(Mt5Model):
     result_state: HistoryQueryResultState
     reason_code: Mt5ReasonCode
 
+    @field_validator(
+        "requested_start_at",
+        "requested_end_at",
+        "query_completed_at",
+        "earliest_returned_at",
+        "latest_returned_at",
+        mode="before",
+    )
+    @classmethod
+    def validate_raw_timestamp_precision(
+        cls, value: object, info: ValidationInfo
+    ) -> object:
+        # JSON strings must be checked before datetime parsing can truncate them.
+        # Native datetime values already have at most microsecond precision.
+        if (
+            isinstance(value, str)
+            and re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+                r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+                value,
+            )
+            is None
+        ):
+            raise ValueError(
+                "history timestamps require whole seconds or at most six "
+                "fractional digits"
+            )
+        if isinstance(value, str) and info.mode == "json":
+            # A before-validator hands its result to strict datetime validation
+            # as Python data, so parse only after checking the raw JSON shape.
+            return datetime.fromisoformat(value)
+        return value
+
     @model_validator(mode="after")
     def validate_evidence(self) -> Self:
         if self.requested_end_at <= self.requested_start_at:
@@ -582,6 +643,17 @@ class HistoryQueryEvidence(Mt5Model):
         }
         if successful and self.query_completed_at is None:
             raise ValueError("successful history evidence requires completion time")
+        if successful and (
+            (
+                self.earliest_returned_at is not None
+                and self.earliest_returned_at < self.requested_start_at
+            )
+            or (
+                self.latest_returned_at is not None
+                and self.latest_returned_at > self.requested_end_at
+            )
+        ):
+            raise ValueError("successful history evidence must fit requested window")
         if self.result_state is HistoryQueryResultState.QUERY_SUCCEEDED:
             if self.reason_code is not Mt5ReasonCode.HEALTHY:
                 raise ValueError("non-empty history evidence requires healthy reason")

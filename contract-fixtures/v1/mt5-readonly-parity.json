@@ -3,5 +3,35 @@
   "validDecimalStrings": ["0", "0.0100", "2345.10", "-0.25"],
   "invalidDecimalValues": [0.1, "1e-8", " 1", "NaN", "Infinity"],
   "validTicketStrings": ["1", "90071992547409930001"],
-  "invalidTicketValues": [0, -1, 9007199254740991, "1.0", "ticket"]
+  "invalidTicketValues": [0, -1, 9007199254740991, "1.0", "ticket"],
+  "historyBoundaryCases": [
+    { "eventAt": "2026-08-27T00:00:00Z", "valid": true },
+    { "eventAt": "2026-08-28T00:00:00Z", "valid": true },
+    { "eventAt": "2026-08-27T12:00:00Z", "valid": true },
+    { "eventAt": "2026-08-26T23:59:59.999999Z", "valid": false },
+    { "eventAt": "2026-08-28T00:00:00.000001Z", "valid": false },
+    { "eventAt": "2026-08-28T07:00:00+07:00", "valid": true },
+    { "eventAt": "2026-08-28T07:00:00.000001+07:00", "valid": false },
+    { "eventAt": "2026-08-28T00:00:00.0000001Z", "valid": false },
+    { "eventAt": "2026-08-28T00:00:00.0000000Z", "valid": false },
+    { "eventAt": "2026-08-28T07:00:00.0000001+07:00", "valid": false }
+  ],
+  "historyTimestampPrecisionCases": [
+    { "suffix": "Z", "valid": true },
+    { "suffix": ".1Z", "valid": true },
+    { "suffix": ".12Z", "valid": true },
+    { "suffix": ".123Z", "valid": true },
+    { "suffix": ".1234Z", "valid": true },
+    { "suffix": ".12345Z", "valid": true },
+    { "suffix": ".123456Z", "valid": true },
+    { "suffix": "+07:00", "valid": true },
+    { "suffix": "-04:00", "valid": true },
+    { "suffix": ".123456+07:00", "valid": true },
+    { "suffix": ".123456-04:00", "valid": true },
+    { "suffix": ".0000001Z", "valid": false },
+    { "suffix": ".0000000Z", "valid": false },
+    { "suffix": ".1234560Z", "valid": false },
+    { "suffix": ".1234567+07:00", "valid": false },
+    { "suffix": ".1234567-04:00", "valid": false }
+  ]
 }

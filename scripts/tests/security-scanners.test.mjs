@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fs, {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, test } from "node:test";
 
 import {
   enumerateTrackedTextFiles,
+  enumerateRepositoryTextFiles,
   formatFinding,
   scanRepositorySecrets,
   scanText,
@@ -46,16 +54,102 @@ test("tracked-file enumeration includes Markdown, PowerShell, and shell scripts"
   const root = temporaryDirectory("aurum-secret-files-");
   initializeRepository(root);
   writeFileSync(join(root, "README.md"), "safe documentation\n");
+  writeFileSync(join(root, "Dockerfile"), "FROM scratch\n");
+  writeFileSync(join(root, ".env.example"), "EXAMPLE_VALUE=\n");
   writeFileSync(join(root, "verify.ps1"), "Write-Output 'safe'\n");
   writeFileSync(join(root, "verify.sh"), "#!/bin/sh\nprintf '%s\\n' safe\n");
   git(root, "add", ".");
   git(root, "commit", "-m", "safe fixtures");
 
   assert.deepEqual(enumerateTrackedTextFiles(root).sort(), [
+    ".env.example",
+    "Dockerfile",
     "README.md",
     "verify.ps1",
     "verify.sh",
   ]);
+});
+
+test("repository secret scan includes new untracked source and deduplicates index entries", () => {
+  const root = temporaryDirectory("aurum-secret-untracked-");
+  initializeRepository(root);
+  writeFileSync(join(root, "tracked.md"), "safe documentation\n");
+  git(root, "add", "tracked.md");
+  writeFileSync(join(root, "intent.ts"), "export const safe = true;\n");
+  git(root, "add", "-N", "intent.ts");
+  const synthetic = `AKIA${"C".repeat(16)}`;
+  writeFileSync(join(root, "new.ts"), `export const value = '${synthetic}';\n`);
+  assert.deepEqual(enumerateRepositoryTextFiles(root).sort(), [
+    "intent.ts",
+    "new.ts",
+    "tracked.md",
+  ]);
+  const result = scanRepositorySecrets(root, { includeHistory: false });
+  assert.equal(result.repositoryFileCount, 3);
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0].reference, "file:new.ts");
+  assert.equal(formatFinding(result.findings[0]).includes(synthetic), false);
+});
+
+test("runtime scan includes untracked production code but keeps its existing source roots", () => {
+  const root = temporaryDirectory("aurum-runtime-untracked-");
+  initializeRepository(root);
+  mkdirSync(join(root, "apps", "web"), { recursive: true });
+  mkdirSync(join(root, "tests"));
+  writeFileSync(
+    join(root, "apps", "web", "tracked.ts"),
+    "export const safe = 1;\n",
+  );
+  git(root, "add", "apps/web/tracked.ts");
+  writeFileSync(
+    join(root, "apps", "web", "intent.ts"),
+    "export const safe = 2;\n",
+  );
+  git(root, "add", "-N", "apps/web/intent.ts");
+  writeFileSync(
+    join(root, "apps", "web", "new.ts"),
+    "broker.order_send({});\n",
+  );
+  writeFileSync(join(root, "tests", "outside.ts"), "broker.order_send({});\n");
+  const result = scanRuntimeFiles(root);
+  assert.equal(result.fileCount, 3);
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0].reference, "apps/web/new.ts");
+  assert.match(result.findings[0].category, /order_send/u);
+});
+
+test("both inventories exclude ignored environment/profile/source files before reading contents", (t) => {
+  const root = temporaryDirectory("aurum-scanner-ignore-");
+  initializeRepository(root);
+  writeFileSync(join(root, ".gitignore"), ".env*\n*.dpapi\nignored/\n");
+  mkdirSync(join(root, "apps", "web", "ignored"), { recursive: true });
+  const ignored = [
+    join(root, ".env.local"),
+    join(root, "apps", "web", "local.dpapi"),
+    join(root, "apps", "web", "ignored", "private.ts"),
+  ];
+  for (const path of ignored)
+    writeFileSync(path, "fictional ignored test data\n");
+  writeFileSync(
+    join(root, "apps", "web", "new.ts"),
+    "export const safe = true;\n",
+  );
+  const originalRead = fs.readFileSync;
+  const spy = t.mock.method(fs, "readFileSync", (path, ...options) => {
+    assert.equal(ignored.includes(resolve(String(path))), false);
+    return originalRead(path, ...options);
+  });
+  syncBuiltinESMExports();
+  try {
+    const secrets = scanRepositorySecrets(root, { includeHistory: false });
+    assert.equal(secrets.repositoryFileCount, 2);
+    assert.deepEqual(secrets.findings, []);
+    assert.deepEqual(scanRuntimeFiles(root), { findings: [], fileCount: 1 });
+    assert.equal(spy.mock.callCount() > 0, true);
+  } finally {
+    spy.mock.restore();
+    syncBuiltinESMExports();
+  }
 });
 
 test("Git-history scan detects a removed synthetic secret without exposing it", () => {
@@ -84,6 +178,20 @@ test("formatted findings never include the discovered value", () => {
   const findings = scanText(synthetic, "file:synthetic.txt");
   assert.equal(findings.length, 1);
   assert.equal(formatFinding(findings[0]).includes(synthetic), false);
+});
+
+test("secret assignment names do not match safe function suffixes or exempt real assignment shapes", () => {
+  assert.deepEqual(
+    scanText(
+      "export const sessionCookie = (config: WebConfiguration) => null;",
+      "safe.ts",
+    ),
+    [],
+  );
+  for (const name of ["COOKIE", "SESSION_COOKIE", "REFRESH_TOKEN"]) {
+    const source = `${name}=${"Q".repeat(32)}`;
+    assert.equal(scanText(source, "different.ts").length, 1);
+  }
 });
 
 test("runtime boundary scan ignores documentation mentions", () => {
