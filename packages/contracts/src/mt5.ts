@@ -251,15 +251,36 @@ export const Mt5HistoryQueryResultStateSchema = z.enum(
   MT5_HISTORY_QUERY_RESULT_STATES,
 );
 
+// Match Python datetime and PostgreSQL timestamptz microsecond precision before
+// either boundary can truncate or round a more precise raw JSON timestamp.
+const HistoryEvidenceTimeSchema = IsoDateTimeSchema.regex(
+  /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/u,
+  "History timestamps require whole seconds or at most six fractional digits.",
+);
+
+// Preserve sub-millisecond ordering for exact history-query boundaries.
+function compareHistoryTime(left: string, right: string): number {
+  const milliseconds = Date.parse(left) - Date.parse(right);
+  if (milliseconds !== 0) return milliseconds;
+  const fraction = (value: string): string =>
+    /\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/u.exec(value)?.[1] ?? "";
+  const a = fraction(left);
+  const b = fraction(right);
+  const width = Math.max(a.length, b.length);
+  const paddedA = a.padEnd(width, "0");
+  const paddedB = b.padEnd(width, "0");
+  return paddedA < paddedB ? -1 : paddedA > paddedB ? 1 : 0;
+}
+
 export const Mt5HistoryQueryEvidenceSchema = z
   .strictObject({
     historyKind: Mt5HistoryQueryKindSchema,
-    requestedStartAt: IsoDateTimeSchema,
-    requestedEndAt: IsoDateTimeSchema,
-    queryCompletedAt: IsoDateTimeSchema.nullable(),
+    requestedStartAt: HistoryEvidenceTimeSchema,
+    requestedEndAt: HistoryEvidenceTimeSchema,
+    queryCompletedAt: HistoryEvidenceTimeSchema.nullable(),
     returnedCount: z.number().int().nonnegative(),
-    earliestReturnedAt: IsoDateTimeSchema.nullable(),
-    latestReturnedAt: IsoDateTimeSchema.nullable(),
+    earliestReturnedAt: HistoryEvidenceTimeSchema.nullable(),
+    latestReturnedAt: HistoryEvidenceTimeSchema.nullable(),
     resultState: Mt5HistoryQueryResultStateSchema,
     reasonCode: Mt5ReasonCodeSchema,
   })
@@ -267,14 +288,12 @@ export const Mt5HistoryQueryEvidenceSchema = z
     const issue = (message: string): void => {
       context.addIssue({ code: "custom", message });
     };
-    if (
-      Date.parse(value.requestedEndAt) <= Date.parse(value.requestedStartAt)
-    ) {
+    if (compareHistoryTime(value.requestedEndAt, value.requestedStartAt) <= 0) {
       issue("History evidence end must be after start.");
     }
     if (
       value.queryCompletedAt !== null &&
-      Date.parse(value.queryCompletedAt) < Date.parse(value.requestedEndAt)
+      compareHistoryTime(value.queryCompletedAt, value.requestedEndAt) < 0
     ) {
       issue("History evidence completion must not precede the requested end.");
     }
@@ -285,7 +304,7 @@ export const Mt5HistoryQueryEvidenceSchema = z
     } else if (
       value.earliestReturnedAt !== null &&
       value.latestReturnedAt !== null &&
-      Date.parse(value.latestReturnedAt) < Date.parse(value.earliestReturnedAt)
+      compareHistoryTime(value.latestReturnedAt, value.earliestReturnedAt) < 0
     ) {
       issue("History evidence boundaries are inconsistent.");
     }
@@ -296,6 +315,17 @@ export const Mt5HistoryQueryEvidenceSchema = z
       value.queryCompletedAt === null
     ) {
       issue("Successful history evidence requires a completion time.");
+    }
+    if (
+      (value.resultState === "query_succeeded" ||
+        value.resultState === "empty_valid_result") &&
+      ((value.earliestReturnedAt !== null &&
+        compareHistoryTime(value.earliestReturnedAt, value.requestedStartAt) <
+          0) ||
+        (value.latestReturnedAt !== null &&
+          compareHistoryTime(value.latestReturnedAt, value.requestedEndAt) > 0))
+    ) {
+      issue("Successful history evidence must fit the requested window.");
     }
     if (
       value.resultState === "query_succeeded" &&

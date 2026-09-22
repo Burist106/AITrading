@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from itertools import count
 from threading import Event
@@ -13,13 +13,16 @@ from mt5_factories import (
     account,
     active_order,
     confirmed_binding,
+    deal,
     fake_adapter,
+    historical_order,
     position,
     specification,
     terminal,
     tick,
 )
 
+from aurum_worker.adapters.fake_mt5 import FakeMt5ReadAdapter
 from aurum_worker.adapters.persistence_mt5 import (
     InMemoryMt5ObservationPersistence,
     WorkerRpcMt5ObservationPersistence,
@@ -30,7 +33,10 @@ from aurum_worker.models.mt5 import (
     ComponentHeartbeatState,
     DatabaseReconciliationState,
     HealthState,
+    HistoricalDealObservation,
+    HistoricalOrderObservation,
     HistoryQueryResultState,
+    HistoryRequest,
     Mt5ComponentCode,
     Mt5ReadFailure,
     Mt5ReasonCode,
@@ -442,11 +448,143 @@ def test_current_report_persists_exact_history_boundaries_and_counts() -> None:
     assert orders.requested_start_at == deals.requested_start_at
     assert orders.query_completed_at == deals.query_completed_at == NOW
     assert orders.returned_count == deals.returned_count == 1
-    assert orders.earliest_returned_at == orders.latest_returned_at
+    assert (
+        orders.earliest_returned_at
+        == orders.latest_returned_at
+        == historical_order().completed_at
+    )
     assert deals.earliest_returned_at == deals.latest_returned_at
     persisted = store.reports[result.report.reconciliation_id]
     assert persisted.order_history_evidence == orders
     assert persisted.deal_history_evidence == deals
+
+
+@pytest.mark.parametrize(
+    ("setup_at", "completed_at", "expected_count"),
+    [
+        (NOW - timedelta(days=8), NOW - timedelta(hours=1), 1),
+        (NOW - timedelta(days=8), NOW, 1),
+        (NOW - timedelta(days=8), NOW - timedelta(minutes=30), 1),
+        (
+            NOW - timedelta(days=8),
+            NOW - timedelta(hours=1, microseconds=1),
+            0,
+        ),
+        (NOW - timedelta(minutes=30), NOW + timedelta(microseconds=1), 0),
+    ],
+)
+def test_fake_order_history_selects_completion_with_inclusive_bounds(
+    setup_at: datetime, completed_at: datetime, expected_count: int
+) -> None:
+    adapter = fake_adapter()
+    adapter.order_history = (
+        historical_order().model_copy(
+            update={"setup_at": setup_at, "completed_at": completed_at}
+        ),
+    )
+    adapter.connect(trace_id="trace-order-selection")
+
+    rows = adapter.get_order_history(
+        HistoryRequest(start_at=NOW - timedelta(hours=1), end_at=NOW),
+        trace_id="trace-order-selection",
+    )
+
+    assert len(rows) == expected_count
+
+
+def test_fake_order_history_rejects_missing_completion() -> None:
+    adapter = fake_adapter()
+    adapter.order_history = (
+        historical_order().model_copy(update={"completed_at": None}),
+    )
+    adapter.connect(trace_id="trace-order-missing-completion")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_order_history(
+            HistoryRequest(start_at=NOW - timedelta(hours=1), end_at=NOW),
+            trace_id="trace-order-missing-completion",
+        )
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.HISTORY_QUERY_FAILED
+
+
+@pytest.mark.parametrize("history_kind", ["orders", "deals"])
+@pytest.mark.parametrize(
+    "outside_at", [NOW - timedelta(days=8), NOW + timedelta(microseconds=1)]
+)
+def test_outside_history_events_block_and_preserve_returned_evidence(
+    monkeypatch: pytest.MonkeyPatch, history_kind: str, outside_at: datetime
+) -> None:
+    adapter = fake_adapter()
+
+    def returned_orders(
+        self: FakeMt5ReadAdapter, request: HistoryRequest, *, trace_id: str
+    ) -> list[HistoricalOrderObservation]:
+        return [
+            historical_order(),
+            historical_order("3002").model_copy(update={"completed_at": outside_at}),
+        ]
+
+    def returned_deals(
+        self: FakeMt5ReadAdapter, request: HistoryRequest, *, trace_id: str
+    ) -> list[HistoricalDealObservation]:
+        return [
+            deal(),
+            deal("4002").model_copy(update={"occurred_at": outside_at}),
+        ]
+
+    if history_kind == "orders":
+        monkeypatch.setattr(FakeMt5ReadAdapter, "get_order_history", returned_orders)
+    else:
+        monkeypatch.setattr(FakeMt5ReadAdapter, "get_deal_history", returned_deals)
+    reconciler, store = service(adapter=adapter)
+
+    result = reconciler.run(trace_id="trace-outside-history-window")
+
+    evidence = (
+        result.report.order_history_evidence
+        if history_kind == "orders"
+        else result.report.deal_history_evidence
+    )
+    known_at = NOW - timedelta(minutes=59)
+    assert evidence.result_state is HistoryQueryResultState.WINDOW_INCOMPLETE
+    assert evidence.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert evidence.returned_count == 2
+    assert evidence.earliest_returned_at == min(known_at, outside_at)
+    assert evidence.latest_returned_at == max(known_at, outside_at)
+    assert evidence.query_completed_at == NOW
+    assert result.health.state is HealthState.BLOCKED
+    assert result.health.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert store.reports[result.report.reconciliation_id] == result.report
+
+
+@pytest.mark.parametrize("include_known_order", [False, True])
+def test_missing_order_completion_blocks_without_inventing_bounds(
+    monkeypatch: pytest.MonkeyPatch, include_known_order: bool
+) -> None:
+    def returned_orders(
+        self: FakeMt5ReadAdapter, request: HistoryRequest, *, trace_id: str
+    ) -> list[HistoricalOrderObservation]:
+        rows = [historical_order().model_copy(update={"completed_at": None})]
+        if include_known_order:
+            rows.append(historical_order("3002"))
+        return rows
+
+    monkeypatch.setattr(FakeMt5ReadAdapter, "get_order_history", returned_orders)
+    reconciler, store = service()
+
+    result = reconciler.run(trace_id="trace-missing-order-completion")
+
+    evidence = result.report.order_history_evidence
+    known_at = historical_order().completed_at if include_known_order else None
+    assert evidence.result_state is HistoryQueryResultState.WINDOW_INCOMPLETE
+    assert evidence.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert evidence.returned_count == 1 + int(include_known_order)
+    assert evidence.earliest_returned_at == evidence.latest_returned_at == known_at
+    assert evidence.query_completed_at == NOW
+    assert result.health.state is HealthState.BLOCKED
+    assert result.health.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert store.reports[result.report.reconciliation_id] == result.report
 
 
 def test_stale_tick_blocks_and_symbol_state_changes_are_observed() -> None:

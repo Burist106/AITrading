@@ -1,0 +1,668 @@
+{
+  "cycle": {
+    "schema_version": "shadow-cycle-v1",
+    "pipeline_version": "shadow-pipeline-v1",
+    "strategy_version": "sma-atr-shadow-v1",
+    "eligibility_version": "shadow-eligibility-v1",
+    "id": "af5e6ab4-08f3-507f-8550-d164dbb2902a",
+    "owner_id": "00000000-0000-4000-8000-000000000201",
+    "trading_account_id": "00000000-0000-4000-8000-000000000301",
+    "trace_id": "8859f346-7ab7-5ebb-8baa-5409e0da37d6",
+    "cycle_key": "b2142c279ff043339012a787b9d11075f632463518353eb5670f57e4e95f7637",
+    "evaluated_at": "2026-08-27T12:00:00Z",
+    "environment": "DEMO_ONLY",
+    "runtime_mode": "SHADOW",
+    "source": "mt5",
+    "grants_eligibility": false,
+    "status": "PROPOSAL",
+    "reason_codes": ["SHADOW_RESEARCH_ONLY", "ELIGIBILITY_BLOCKED"],
+    "policy_version_id": "00000000-0000-4000-8000-000000000401",
+    "policy_version": 1,
+    "mode_version": 1,
+    "market": {
+      "snapshot_id": "42c0c6ff-0b29-5024-8025-e51a78585193",
+      "feature_id": "fc30c6bf-fa0f-515c-82b7-719e9560f6a8",
+      "reconciliation_id": "00000000-0000-4000-8000-000000000001",
+      "input_digest": "3fa6e8bff8163892d60aff807088b7c2853836da5f27b8b3ef9547ca631f4657",
+      "account_fingerprint": "mt5-account-v1:688bf47ec2aac86782bc0e06cfb021a70167bd1c617a88902ab1ac78261de88f",
+      "server_fingerprint": "mt5-server-v1:76609dff7d588a047e05d46a5ce68a088c78d0793a74e6e9de938287689c42d2",
+      "specification_fingerprint": "mt5-spec-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "adapter_version": "fake-v1",
+      "market_adapter_version": "fake-v1",
+      "market_time_policy": "utc_epoch_v1",
+      "broker_symbol": "XAUUSD",
+      "captured_at": "2026-08-27T12:00:00Z",
+      "tick_at": "2026-08-27T11:59:59Z",
+      "last_bar_closed_at": "2026-08-27T12:00:00Z",
+      "bid": "2000",
+      "ask": "2000.02",
+      "point": "0.01",
+      "tick_size": "0.01",
+      "fast_sma": "1999.9",
+      "slow_sma": "1999.8",
+      "atr": "2.0",
+      "bars": [
+        {
+          "open_at": "2026-08-27T11:54:00Z",
+          "open": "1999.5",
+          "high": "2000.5",
+          "low": "1998.5",
+          "close": "1999.5"
+        },
+        {
+          "open_at": "2026-08-27T11:55:00Z",
+          "open": "1999.6",
+          "high": "2000.6",
+          "low": "1998.6",
+          "close": "1999.6"
+        },
+        {
+          "open_at": "2026-08-27T11:56:00Z",
+          "open": "1999.7",
+          "high": "2000.7",
+          "low": "1998.7",
+          "close": "1999.7"
+        },
+        {
+          "open_at": "2026-08-27T11:57:00Z",
+          "open": "1999.8",
+          "high": "2000.8",
+          "low": "1998.8",
+          "close": "1999.8"
+        },
+        {
+          "open_at": "2026-08-27T11:58:00Z",
+          "open": "1999.9",
+          "high": "2000.9",
+          "low": "1998.9",
+          "close": "1999.9"
+        },
+        {
+          "open_at": "2026-08-27T11:59:00Z",
+          "open": "2000.0",
+          "high": "2001.0",
+          "low": "1999.0",
+          "close": "2000.0"
+        }
+      ]
+    },
+    "candidate": {
+      "id": "08efa5ca-5994-5a52-acee-489e0ccae0d6",
+      "direction": "BUY",
+      "created_at": "2026-08-27T12:00:00Z",
+      "expires_at": "2026-08-27T12:00:30Z",
+      "entry_price": "2000.02",
+      "stop_loss_price": "1996.02",
+      "take_profit_price": "2012.02"
+    },
+    "risk": {
+      "version": "shadow-risk-v1",
+      "outcome": "PASS",
+      "checks": [
+        {
+          "code": "ACCOUNT_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "ACCOUNT_RISK_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "SAFETY_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "COSTS_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "TICK_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "SPECIFICATION_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "CONFIRMED_BINDING_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "RECONCILIATION_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "POLICY_AVAILABLE",
+          "passed": true
+        },
+        {
+          "code": "PRODUCTION_SOURCE",
+          "passed": true
+        },
+        {
+          "code": "ACCOUNT_RISK_PROVENANCE",
+          "passed": true
+        },
+        {
+          "code": "ACCOUNT_RISK_FRESH",
+          "passed": true
+        },
+        {
+          "code": "SAFETY_PROVENANCE",
+          "passed": true
+        },
+        {
+          "code": "SAFETY_FRESH",
+          "passed": true
+        },
+        {
+          "code": "COSTS_PROVENANCE",
+          "passed": true
+        },
+        {
+          "code": "COSTS_FRESH",
+          "passed": true
+        },
+        {
+          "code": "ACCOUNT_SOURCE",
+          "passed": true
+        },
+        {
+          "code": "ACCOUNT_FRESH",
+          "passed": true
+        },
+        {
+          "code": "TICK_SOURCE",
+          "passed": true
+        },
+        {
+          "code": "TICK_FRESH",
+          "passed": true
+        },
+        {
+          "code": "SPECIFICATION_SOURCE",
+          "passed": true
+        },
+        {
+          "code": "SPECIFICATION_FRESH",
+          "passed": true
+        },
+        {
+          "code": "RECONCILIATION_SOURCE",
+          "passed": true
+        },
+        {
+          "code": "RECONCILIATION_FRESH",
+          "passed": true
+        },
+        {
+          "code": "DEMO_ACCOUNT_BINDING",
+          "passed": true
+        },
+        {
+          "code": "USD_VALUATION",
+          "passed": true
+        },
+        {
+          "code": "SYMBOL_BINDING",
+          "passed": true
+        },
+        {
+          "code": "POLICY_BINDING",
+          "passed": true
+        },
+        {
+          "code": "CANDIDATE_CURRENT",
+          "passed": true
+        },
+        {
+          "code": "OPERATIONAL_SAFETY",
+          "passed": true
+        },
+        {
+          "code": "EMERGENCY_CLEAR",
+          "passed": true
+        },
+        {
+          "code": "NEWS_CLEAR",
+          "passed": true
+        },
+        {
+          "code": "RECONCILIATION_MATCHED",
+          "passed": true
+        },
+        {
+          "code": "NO_OPEN_EXPOSURE",
+          "passed": true
+        },
+        {
+          "code": "DAILY_TRADE_LIMIT",
+          "passed": true
+        },
+        {
+          "code": "LOSS_LEDGER_COMPLETE",
+          "passed": true
+        },
+        {
+          "code": "TICK_CURRENT",
+          "passed": true
+        },
+        {
+          "code": "SPREAD_LIMIT",
+          "passed": true
+        },
+        {
+          "code": "SYMBOL_USABLE",
+          "passed": true
+        },
+        {
+          "code": "DIRECTIONAL_SL_TP",
+          "passed": true
+        },
+        {
+          "code": "ENTRY_TOLERANCE",
+          "passed": true
+        },
+        {
+          "code": "TICK_GRID",
+          "passed": true
+        },
+        {
+          "code": "BROKER_STOPS",
+          "passed": true
+        },
+        {
+          "code": "COSTS_COMPLETE",
+          "passed": true
+        },
+        {
+          "code": "RISK_BUDGET",
+          "passed": true
+        },
+        {
+          "code": "NET_RISK_REWARD",
+          "passed": true
+        },
+        {
+          "code": "BROKER_MINIMUM_VOLUME",
+          "passed": true
+        },
+        {
+          "code": "SIZED_LOSS_WITHIN_BUDGET",
+          "passed": true
+        }
+      ],
+      "input_digest": "7eb1b21a06c7af16d92d18b0768c310aea3b455c4f93d7044fd72e46285a268b",
+      "source_receipts": [
+        {
+          "kind": "ledger",
+          "source_id": "constructed-test-only",
+          "source_version": "v1",
+          "evidence_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "observed_at": "2026-08-27T12:00:00Z",
+          "valid_until": "2026-08-27T12:00:05Z",
+          "covered_from": "2026-08-20T12:00:00Z",
+          "covered_until": "2026-08-27T12:30:00Z"
+        },
+        {
+          "kind": "safety",
+          "source_id": "constructed-test-only",
+          "source_version": "v1",
+          "evidence_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "observed_at": "2026-08-27T12:00:00Z",
+          "valid_until": "2026-08-27T12:00:05Z",
+          "covered_from": "2026-08-20T12:00:00Z",
+          "covered_until": "2026-08-27T12:30:00Z"
+        },
+        {
+          "kind": "news",
+          "source_id": "constructed-test-only",
+          "source_version": "v1",
+          "evidence_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "observed_at": "2026-08-27T12:00:00Z",
+          "valid_until": "2026-08-27T12:00:05Z",
+          "covered_from": "2026-08-20T12:00:00Z",
+          "covered_until": "2026-08-27T12:30:00Z"
+        },
+        {
+          "kind": "costs",
+          "source_id": "constructed-test-only",
+          "source_version": "v1",
+          "evidence_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "observed_at": "2026-08-27T12:00:00Z",
+          "valid_until": "2026-08-27T12:00:05Z",
+          "covered_from": "2026-08-20T12:00:00Z",
+          "covered_until": "2026-08-27T12:30:00Z"
+        }
+      ],
+      "calculated_volume": "0.01",
+      "estimated_loss_usd": "4.0000",
+      "estimated_net_reward_usd": "12.0000"
+    },
+    "eligibility": {
+      "outcome": "BLOCK",
+      "checks": [
+        {
+          "code": "STRATEGY_VERSION",
+          "passed": true
+        },
+        {
+          "code": "DATA_QUALITY",
+          "passed": true
+        },
+        {
+          "code": "REGIME_VALIDATION",
+          "passed": false
+        },
+        {
+          "code": "SAMPLE_SIZE",
+          "passed": false
+        },
+        {
+          "code": "CALIBRATION_NOT_REQUIRED",
+          "passed": true
+        },
+        {
+          "code": "HARD_RISK",
+          "passed": true
+        },
+        {
+          "code": "EXECUTION_DISABLED",
+          "passed": false
+        }
+      ],
+      "sample_count": 0,
+      "minimum_sample_size": 30,
+      "calibrated": false
+    }
+  },
+  "outcome": {
+    "schema_version": "shadow-outcome-v1",
+    "tracker_version": "quote-observed-v1",
+    "simulation": true,
+    "grants_eligibility": false,
+    "id": "61aa79ca-5473-5301-ab47-7f8dcffa5dee",
+    "owner_id": "00000000-0000-4000-8000-000000000201",
+    "trading_account_id": "00000000-0000-4000-8000-000000000301",
+    "cycle_id": "af5e6ab4-08f3-507f-8550-d164dbb2902a",
+    "sequence": 1,
+    "observed_at": "2026-08-27T12:00:06Z",
+    "status": "UNKNOWN",
+    "reason_code": "QUOTE_GAP",
+    "bid": null,
+    "ask": null,
+    "price_source": "unavailable",
+    "net_pnl_usd": null
+  },
+  "schema_version": "shadow-parity-v1",
+  "mutations": [
+    {
+      "target": "cycle",
+      "name": "fake-source",
+      "path": ["source"],
+      "value": "fake_mt5",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "live",
+      "path": ["environment"],
+      "value": "LIVE",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "mode",
+      "path": ["runtime_mode"],
+      "value": "AUTO",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "boolean-number",
+      "path": ["grants_eligibility"],
+      "value": 0,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "missing-safety",
+      "path": ["grants_eligibility"],
+      "remove": true,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "numeric-money",
+      "path": ["candidate", "entry_price"],
+      "value": 2000.02,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "exponent-money",
+      "path": ["candidate", "entry_price"],
+      "value": "2e3",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "leading-zero-money",
+      "path": ["candidate", "entry_price"],
+      "value": "02000.02",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "negative-money",
+      "path": ["candidate", "entry_price"],
+      "value": "-2000.02",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "oversize",
+      "path": ["risk", "calculated_volume"],
+      "value": "0.02",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "wrong-risk",
+      "path": ["risk", "outcome"],
+      "value": "BLOCK",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "unknown-probability",
+      "path": ["eligibility", "probability"],
+      "value": 0.99,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "sample-disagrees",
+      "path": ["eligibility", "sample_count"],
+      "value": 30,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "boolean-sample",
+      "path": ["eligibility", "sample_count"],
+      "value": false,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "overflow-version",
+      "path": ["mode_version"],
+      "value": 2147483648,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "submicrosecond",
+      "path": ["evaluated_at"],
+      "value": "2026-08-27T12:00:00.0000001Z",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "nonUTC",
+      "path": ["evaluated_at"],
+      "value": "2026-08-27T19:00:00+07:00",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "numeric-time",
+      "path": ["evaluated_at"],
+      "value": 1787832000,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "uuid-not-canonical",
+      "path": ["owner_id"],
+      "value": "00000000000040008000000000000001",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "bar-gap",
+      "path": ["market", "bars", "1", "open_at"],
+      "value": "2026-08-27T11:54:00Z",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "tick-future",
+      "path": ["market", "tick_at"],
+      "value": "2026-08-27T12:00:01Z",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "inverted-quote",
+      "path": ["market", "ask"],
+      "value": "1999",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "wrong-wait",
+      "path": ["status"],
+      "value": "WAIT",
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "not-simulation",
+      "path": ["simulation"],
+      "value": false,
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "numeric-simulation",
+      "path": ["simulation"],
+      "value": 1,
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "fabricated-pnl",
+      "path": ["net_pnl_usd"],
+      "value": "2.00",
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "outcome-overflow",
+      "path": ["sequence"],
+      "value": 33,
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "unknown-price",
+      "path": ["bid"],
+      "value": "2000",
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "unavailable-target",
+      "path": ["status"],
+      "value": "TARGET_OBSERVED",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "missing-risk-digest",
+      "path": ["risk", "input_digest"],
+      "remove": true,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "missing-pass-receipts",
+      "path": ["risk", "source_receipts"],
+      "value": [],
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "duplicate-source",
+      "path": ["risk", "source_receipts", "1", "kind"],
+      "value": "ledger",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "source-validity-inverted",
+      "path": ["risk", "source_receipts", "0", "valid_until"],
+      "value": "2026-08-26T00:00:00Z",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "source-coverage-unpaired",
+      "path": ["risk", "source_receipts", "0", "covered_until"],
+      "value": null,
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "future-pass-receipt",
+      "path": ["risk", "source_receipts", "0", "observed_at"],
+      "value": "2026-08-27T12:00:01Z",
+      "valid": false
+    },
+    {
+      "target": "cycle",
+      "name": "expired-pass-receipt",
+      "path": ["risk", "source_receipts", "0"],
+      "value": {
+        "kind": "ledger",
+        "source_id": "constructed-test-only",
+        "source_version": "v1",
+        "evidence_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "observed_at": "2026-08-27T11:59:58Z",
+        "valid_until": "2026-08-27T11:59:59Z",
+        "covered_from": "2026-08-20T12:00:00Z",
+        "covered_until": "2026-08-27T12:30:00Z"
+      },
+      "valid": false
+    },
+    {
+      "target": "outcome",
+      "name": "year-zero",
+      "path": ["observed_at"],
+      "value": "0000-08-27T12:00:06Z",
+      "valid": false
+    }
+  ]
+}

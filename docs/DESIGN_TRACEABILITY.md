@@ -1,5 +1,13 @@
 # Bootstrap Design Traceability
 
+## Milestone 3 integrated Shadow code (2026-09-22)
+
+The reproducibility gate now also maps to `shadow/replay.py`, `replay_archive.py` and the local-only `shadow_replay_cli.py`. The Worker must archive each reached risk input/cycle before its remote write; historical risk and eligibility can be checked without MT5. CLI status is explicitly local and does not imply current health, source authenticity, remote persistence or execution permission. See [the replay boundaries](SHADOW_REPLAY.md).
+
+The handoff's Worker/market-data boundary and pure Risk Engine requirement now map to `shadow/market.py` and `shadow/risk.py`. Market output contains versioned normalization/features and content-derived identifiers; the risk evaluator consumes explicit context and returns immutable checks, not executable orders. Reconciliation enforces completion-time historical Order selection and bounded event evidence in both Worker and browser contracts. These are production components tested using doubles, not a replacement fixture runtime.
+
+The continuation adds `shadow/strategy.py`, `pipeline.py`, `runtime.py` and `outcomes.py`; dedicated `shadow_cycles` / `shadow_outcome_events` preserve non-executable lineage. `ShadowConsole.tsx` and authenticated owner-scoped gateways now power dashboard, proposal detail and journal routes without fixture fallback. The health route presents persisted pipeline evidence, not inferred current native health; Position evidence is explicitly unavailable rather than an invented zero balance/exposure. Existing tokens and reusable presentation primitives were reused; no prototype component was copied. Hosted provisioning, genuine source providers and full real-source validation still block operational milestone completion.
+
 ## Milestone 2 integration status
 
 Milestone 2 preserves the Bootstrap visual shell and Milestone 1 owner-scoped control-plane boundary. It adds one bounded, read-only MT5 observation panel and an owner-scoped mapper for sanitized account, symbol, latest-tick, and reconciliation rows. The visible panel remains fixture-driven until deployment wiring is separately authorized; it adds no MT5 controls and does not turn any fixture action into an operational action. Proposal facts and normalized risk checks remain separate read models, a missing or expired heartbeat resolves to `unknown`, and command progress uses the browser-safe projection without payload, lease token, or raw last error. The table below otherwise continues to describe the Bootstrap shell; its broker/order/Position and emergency scenarios remain presentation-only.

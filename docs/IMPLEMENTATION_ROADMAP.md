@@ -58,7 +58,7 @@ Exit gate:
 
 ## Milestone 2 — Read-only Windows MT5 Worker
 
-Release status (2026-09-02): **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates passed, and Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. Milestone 3 is not started or authorized. The real-terminal smoke remains `NOT RUN` unless an operator explicitly opts in with an eligible local Demo Terminal and every check succeeds.
+Release status (2026-09-02): **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates passed, and Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. At that release, Milestone 3 was not started or authorized and the real-terminal smoke was `NOT RUN`. The later opted-in native smoke was blocked by the unresolved transaction-time contract; its separate evidence is preserved in [Milestone 3 native readiness](MILESTONE_3_READINESS.md).
 
 Deliver:
 
@@ -94,7 +94,11 @@ The final local suite passed with 88 TypeScript tests, 233 Worker tests, 400 pgT
 
 ## Milestone 3 — Shadow Pipeline
 
-Status: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**.
+Status (2026-09-22): **IN PROGRESS — PRODUCTION DEMO/SHADOW COMPONENTS; NOT COMPLETE**.
+
+The user authorized the real Demo system and corrected the earlier offline-only interpretation. The end-to-end code now connects runtime orchestration, market/features, a versioned research baseline, risk/eligibility, Shadow proposals, immutable journal/outcomes and authenticated owner-scoped pages. Genuine ledger/baseline/news/cost/safety evidence, hosted provisioning and full native acceptance remain unavailable; no fixtures are substituted. The [implementation record](MILESTONE_3_IMPLEMENTATION.md) separates integrated code from unresolved operational readiness.
+
+The earlier component slice passed 178 TypeScript tests, 1,052 Worker tests and 582 pgTAP assertions. Those are historical counts. The implementation record contains current integration checks; neither set proves a complete real-terminal smoke or operational milestone completion.
 
 Deliver:
 

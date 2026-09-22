@@ -4,7 +4,7 @@
 
 Build a safety-first XAU/USD trading research and Demo execution platform. The system is strictly `DEMO ONLY` until a separate future project explicitly changes that rule. No task in the current roadmap authorizes Live Trading.
 
-Current delivery status: Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. Milestone 3 is not started and is not authorized by the current task.
+Current delivery status: Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**. On 2026-09-22 the user explicitly authorized development of the real Demo system and Milestone 3, correcting an earlier offline-only interpretation. Milestone 3 is **IN PROGRESS**, not complete. Build production components with deterministic tests; do not substitute fixtures for unavailable real evidence. Native MT5 transaction-time readiness remains unresolved and must fail closed. Broker execution, approval/command consumption, Live Trading, and automatic commit/push/merge remain unauthorized. See `docs/MILESTONE_3_IMPLEMENTATION.md` for current delivery boundaries.
 
 ## Source-of-truth order
 

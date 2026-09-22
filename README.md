@@ -12,9 +12,11 @@ Aurum Console is a safety-first control-plane and Windows Worker foundation for 
 - Future executable proposals require a Stop Loss
 - Completed: **Bootstrap and Milestone 1**
 - Milestone 2: **COMPLETE WITH DOCUMENTED LIMITATIONS**; the heartbeat/liveness local gates and the new clean-checkout Pull Request run passed on 2026-09-02
-- Milestone 3: **NOT STARTED — NOT AUTHORIZED BY THE CURRENT TASK**
+- Milestone 3: **IN PROGRESS — PRODUCTION DEMO/SHADOW COMPONENTS; NOT COMPLETE**
 
 Milestone 2 is observation-only. The repository has no broker-write path, no Position modification, no command consumer, and no Live Trading switch. Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on heartbeat implementation commit `3e25007`.
+
+The authorized M3 continuation now connects the serialized Worker, market/features, versioned research baseline, deterministic risk/eligibility, immutable Shadow proposals/outcomes, and authenticated owner-scoped dashboard. Production pages no longer fall back to design fixtures. Missing real inputs produce explicit BLOCK/unavailable states. Real-source acceptance remains blocked by the native transaction-time contract and unavailable ledger/news/cost/safety providers and hosted configuration; this is not a completed operational trading system. See [implementation and runbook](docs/MILESTONE_3_IMPLEMENTATION.md).
 
 ## Architecture
 
@@ -65,7 +67,7 @@ pnpm worker:install:mt5
 
 This pins `MetaTrader5==5.0.6090` for Python `3.13.7`. Normal Linux quality checks do not install it. The optional real-terminal smoke command is disabled unless every explicit local precondition is supplied; see [MT5 read-only runbook](docs/MT5_READ_ONLY.md).
 
-Actual real-terminal smoke status for this patch: **NOT RUN**. No eligible explicitly opted-in local Demo Terminal configuration was supplied; unit tests and Windows import checks are not reported as a real-terminal pass.
+The original Milestone 2 release smoke was **NOT RUN** because its local preconditions were absent. A later explicitly opted-in native attempt was **BLOCKED — RECONCILIATION_INCOMPLETE** at the unresolved transaction-time contract, although the bounded market check passed. Native smoke has not been rerun for the current Milestone 3 implementation. See the [native readiness record](docs/MILESTONE_3_READINESS.md); no full native smoke pass is established.
 
 Do not add credentials to the repository. Copy variable names from `.env.example` only when local configuration is needed, keep values outside version control, and never configure an MT5 password. The Worker may inspect the account identifier/server returned by the already-open terminal only transiently to verify a masked/hashed binding; raw identifiers never belong in logs, Supabase, browser output, snapshots, prompts, or commits.
 
@@ -79,9 +81,9 @@ Run the full non-database gate:
 pnpm check
 ```
 
-The gate includes formatting, lint, TypeScript/Python type checks, unit/component tests, production builds, a tracked-file and Git-history secret scan, and syntax-aware production runtime-boundary checks.
+The gate includes formatting, lint, TypeScript/Python type checks, unit/component tests, production builds, repository-file and bounded Git-history secret scans, and syntax-aware production runtime-boundary checks.
 
-Heartbeat/liveness regression tests cover continuous renewal, authoritative-state caps, tick-freshness mapping, Web expiry handling, bounded database upserts, RLS, and no-audit-growth behavior. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; format, lint, type-check, production build, generated types, dependency checks, and security scans also passed. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`.
+Heartbeat/liveness regression tests cover continuous renewal, authoritative-state caps, tick-freshness mapping, Web expiry handling, bounded database upserts, RLS, and no-audit-growth behavior. The final Milestone 2 local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; format, lint, type-check, production build, generated types, dependency checks, and security scans also passed. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`. These are historical release checks; current Milestone 3 results are recorded separately in its implementation document.
 
 Run the dependency checks separately:
 
@@ -124,6 +126,8 @@ pnpm db:stop
 - [Security](docs/SECURITY.md)
 - [Decisions](docs/DECISIONS.md)
 - [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
+- [Milestone 3 implementation and remaining delivery gates](docs/MILESTONE_3_IMPLEMENTATION.md)
+- [Native readiness investigation](docs/MILESTONE_3_READINESS.md)
 - [P0 acceptance gates](docs/P0_ACCEPTANCE_GATES.md)
 - [Database foundation](docs/DATABASE_FOUNDATION.md)
 - [MT5 read-only Worker and smoke runbook](docs/MT5_READ_ONLY.md)

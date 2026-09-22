@@ -52,6 +52,7 @@ const pgTapTestPaths = [
   "supabase/tests/007_mt5_read_observations.test.sql",
   "supabase/tests/008_m2_source_review_patch.test.sql",
   "supabase/tests/009_heartbeat_liveness.test.sql",
+  "supabase/tests/010_shadow_pipeline.test.sql",
 ];
 const concurrentClaimTestDirectory = resolve(
   projectRoot,
@@ -719,6 +720,60 @@ async function runConcurrentClaimIntegrationTest() {
   );
 }
 
+function runShadowWireParityIntegrationTest() {
+  // The same small fictional corpus is read by Python and TypeScript. Pass it
+  // as an escaped SQL value, never a shell argument or a database file path.
+  const path = resolve(projectRoot, "contract-fixtures/v1/shadow-parity.json");
+  const raw = readFileSync(path, "utf8");
+  if (Buffer.byteLength(raw, "utf8") > 128 * 1024) {
+    fail("The Shadow wire corpus exceeds its bounded size");
+  }
+  const corpus = JSON.parse(raw);
+  if (
+    !Array.isArray(corpus.mutations) ||
+    corpus.mutations.length > 200 ||
+    corpus.mutations.some(
+      (item) =>
+        !["cycle", "outcome"].includes(item.target) ||
+        typeof item.valid !== "boolean" ||
+        !Array.isArray(item.path) ||
+        !item.path.every((part) => typeof part === "string"),
+    )
+  ) {
+    fail("The Shadow wire corpus has an invalid mutation contract");
+  }
+  const escapedCorpus = JSON.stringify(corpus).replaceAll("'", "''");
+  const count = corpus.mutations.length + 2;
+  const result = runInnerPsql(
+    "postgres",
+    `begin;
+set local role aurum_function_owner;
+with corpus as (select '${escapedCorpus}'::jsonb as data),
+cases as (
+  select 'cycle' as kind, data -> 'cycle' as payload, true as expected from corpus
+  union all select 'outcome', data -> 'outcome', true from corpus
+  union all
+  select item ->> 'target',
+    case when item ->> 'remove' = 'true'
+      then (data -> (item ->> 'target')) #- array(select pg_catalog.jsonb_array_elements_text(item -> 'path'))
+      else pg_catalog.jsonb_set(data -> (item ->> 'target'), array(select pg_catalog.jsonb_array_elements_text(item -> 'path')), item -> 'value') end,
+    (item ->> 'valid')::boolean
+  from corpus cross join lateral pg_catalog.jsonb_array_elements(data -> 'mutations') item
+), results as (
+  select expected, case when kind='cycle' then private.m3_cycle(payload) else private.m3_outcome(payload) end as actual from cases
+)
+select pg_catalog.count(*)::text || '|' || pg_catalog.count(*) filter(where actual is distinct from expected)::text from results;
+rollback;`,
+  );
+  requirePsqlSuccess(result, "shared Shadow wire parity check");
+  if (result.stdout.trim() !== `${count}|0`) {
+    fail("The shared Shadow wire corpus disagrees with SQL validation");
+  }
+  console.log(
+    `The isolated shared Shadow wire parity check passed ${count} assertions.`,
+  );
+}
+
 function prepareRunner() {
   const staleRunner = inspectOptional("container", runnerContainer);
 
@@ -888,7 +943,10 @@ if (command === "test") {
   await runCheckedLocalCommand(
     ["test", "db", ...pgTapTestPaths, "--local"],
     "The isolated pgTAP and concurrent claim database tests completed.",
-    runConcurrentClaimIntegrationTest,
+    async () => {
+      await runConcurrentClaimIntegrationTest();
+      runShadowWireParityIntegrationTest();
+    },
   );
   process.exit(0);
 }

@@ -29,9 +29,56 @@ const parity = JSON.parse(
   invalidDecimalValues: unknown[];
   validTicketStrings: string[];
   invalidTicketValues: unknown[];
+  historyBoundaryCases: { eventAt: string; valid: boolean }[];
+  historyTimestampPrecisionCases: { suffix: string; valid: boolean }[];
 };
 
 describe("MT5 decimal-string and sanitized read contracts", () => {
+  it.each(parity.historyBoundaryCases)(
+    "matches Python history-window acceptance at $eventAt",
+    ({ eventAt, valid }) => {
+      expect(
+        Mt5HistoryQueryEvidenceSchema.safeParse({
+          historyKind: "orders",
+          requestedStartAt: "2026-08-27T00:00:00Z",
+          requestedEndAt: "2026-08-28T00:00:00Z",
+          queryCompletedAt: "2026-08-28T00:00:01Z",
+          returnedCount: 1,
+          earliestReturnedAt: eventAt,
+          latestReturnedAt: eventAt,
+          resultState: "query_succeeded",
+          reasonCode: "HEALTHY",
+        }).success,
+      ).toBe(valid);
+    },
+  );
+  describe.each([
+    ["requestedStartAt", "2026-08-23T00:00:00"],
+    ["requestedEndAt", "2026-08-30T00:00:00"],
+    ["queryCompletedAt", "2026-09-01T00:00:00"],
+    ["earliestReturnedAt", "2026-08-26T00:00:00"],
+    ["latestReturnedAt", "2026-08-28T00:00:00"],
+  ])("history timestamp precision for %s", (field, date) => {
+    it.each(parity.historyTimestampPrecisionCases)(
+      "matches Python raw timestamp precision at $suffix",
+      ({ suffix, valid }) => {
+        expect(
+          Mt5HistoryQueryEvidenceSchema.safeParse({
+            historyKind: "orders",
+            requestedStartAt: "2026-08-23T00:00:00Z",
+            requestedEndAt: "2026-08-30T00:00:00Z",
+            queryCompletedAt: "2026-09-01T00:00:00Z",
+            returnedCount: 2,
+            earliestReturnedAt: "2026-08-26T00:00:00Z",
+            latestReturnedAt: "2026-08-28T00:00:00Z",
+            resultState: "query_succeeded",
+            reasonCode: "HEALTHY",
+            [field]: date + suffix,
+          }).success,
+        ).toBe(valid);
+      },
+    );
+  });
   it("restricts component heartbeats to typed codes, states, and reasons", () => {
     const heartbeat = {
       componentCode: "execution.market_data",

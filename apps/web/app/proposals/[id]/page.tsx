@@ -1,29 +1,31 @@
-import type { Metadata } from "next";
+import { UuidSchema } from "@aurum/contracts";
 import { notFound } from "next/navigation";
 
-import { ApplicationShell } from "../../../components/ApplicationShell";
-import { ProposalDetailView } from "../../../components/ProposalDetailView";
-import { loadScenarioView, type ScenarioQuery } from "../../../lib/scenario";
+import {
+  ShadowDecisionEvidence,
+  ShadowEmpty,
+  ShadowShell,
+} from "../../../components/ShadowConsole";
+import { loadShadowScreen } from "../../../lib/shadow-session";
 
-export const metadata: Metadata = { title: "รายละเอียดข้อเสนอ" };
-
-export function generateStaticParams() {
-  return [{ id: "demo-proposal" }];
-}
+export const dynamic = "force-dynamic";
+export const metadata = { title: "รายละเอียดรอบ Shadow" };
 
 export default async function ProposalPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: ScenarioQuery;
 }) {
   const { id } = await params;
-  if (id !== "demo-proposal") notFound();
-  const view = await loadScenarioView(searchParams);
+  if (!UuidSchema.safeParse(id).success) notFound();
+  const screen = await loadShadowScreen({ id });
   return (
-    <ApplicationShell scenario={view.scenario} scenarioId={view.scenarioId}>
-      <ProposalDetailView view={view} />
-    </ApplicationShell>
+    <ShadowShell screen={screen} title="รายละเอียดรอบ Shadow">
+      {screen.decision ? (
+        <ShadowDecisionEvidence decision={screen.decision} />
+      ) : (
+        <ShadowEmpty />
+      )}
+    </ShadowShell>
   );
 }

@@ -37,7 +37,7 @@ Do not populate `.env.example`. If a later UI task needs local public configurat
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The initial view is the `no_signal` scenario in immutable `SHADOW` mode. The Development State Simulator is available only in development and test; it changes presentation fixtures only.
+Open `http://localhost:3000`. Production routes now show an explicit unconfigured/signed-out state until a secure authenticated read connection is supplied; they never substitute the `no_signal` fixture. Legacy scenario components remain test/development artifacts and are excluded from production. See [the M3 runbook](MILESTONE_3_IMPLEMENTATION.md) for bounded Worker composition and unresolved real-source prerequisites. No broker-write or Live mode exists.
 
 ## Quality commands
 
@@ -107,7 +107,7 @@ Stop the stack when finished:
 pnpm db:stop
 ```
 
-`db:lint` runs schema linting locally at error severity. `db:test` runs nine pgTAP suites and then a credential-free integration with two overlapping local `psql` sessions inside the inner database container. The integration verifies and uses the pinned local role graph's existing SET access to the exact Worker role without changing membership: the first session must receive a typed `CLAIMED` result and hold its lock, while the second receives one payload-free `NO_ELIGIBLE_COMMAND` result. It rolls both transactions back and verifies that no command/event/audit mutation survived. If any phase fails, the guarded wrapper removes the isolated volume instead of leaving a partial database behind. `db:types:generate` formats with the pinned workspace Prettier configuration and writes `packages/contracts/src/database.generated.ts` atomically from the local `public` schema. `db:types:check` performs the same isolated generation and formatting in memory, then fails on any missing or stale output. Never redirect generation directly over the committed file because a failed CLI command could truncate it.
+`db:lint` runs schema linting locally at error severity. `db:test` runs ten pgTAP suites, shared Shadow wire validation and then a credential-free integration with two overlapping local `psql` sessions inside the inner database container. The integration verifies and uses the pinned local role graph's existing SET access to the exact Worker role without changing membership: the first session must receive a typed `CLAIMED` result and hold its lock, while the second receives one payload-free `NO_ELIGIBLE_COMMAND` result. It rolls both transactions back and verifies that no command/event/audit mutation survived. If any phase fails, the guarded wrapper removes the isolated volume instead of leaving a partial database behind. `db:types:generate` formats with the pinned workspace Prettier configuration and writes `packages/contracts/src/database.generated.ts` atomically from the local `public` schema. `db:types:check` performs the same isolated generation and formatting in memory, then fails on any missing or stale output. Never redirect generation directly over the committed file because a failed CLI command could truncate it.
 
 This milestone is local only. Do not log in to Supabase, link the workspace, select a remote project, use a remote-project flag, or push the database. The local Auth seed has a fictional `.invalid` owner address and no password.
 
@@ -117,7 +117,7 @@ This milestone is local only. Do not log in to Supabase, link the workspace, sel
 - Scenario states such as Live account detected, AUTO eligible, order pending, or position open are fictional presentation fixtures.
 - Production output contains no Development State Simulator.
 - Browser direct DML to protected operational tables is denied; user actions create durable intents through narrow functions.
-- No MetaTrader import, Worker command consumer, broker write, simulated execution, or Position modification exists.
+- The optional Windows native MT5 import exists only behind the reviewed read-only wrapper. No Worker command consumer, broker write, simulated execution or Position modification exists. Local replay verification does not import that wrapper or connect to a terminal/service.
 - Realtime is disabled and is never durable command truth.
 - The security check must report any high-confidence forbidden runtime pattern instead of silently ignoring it.
 

@@ -26,3 +26,6 @@ Thumbs.db
 # Local Windows profile ciphertext is never a repository artifact.
 *.dpapi
 *.dpapi.tmp
+
+# Sanitized financial replay archives are local-only, never publication artifacts.
+*.aurum-replay.sqlite3*
