@@ -93,13 +93,14 @@ def main(arguments: list[str] | None = None) -> int:
         if sys.platform != "win32":
             print("BLOCKED — PROFILE_WINDOWS_ONLY")
             return 2
-        try:
-            from aurum_worker.mt5_profile_ui import open_profile_window
+        else:
+            try:
+                from aurum_worker.mt5_profile_ui import open_profile_window
 
-            return open_profile_window()
-        except Exception:
-            print("BLOCKED — PROFILE_UI_UNAVAILABLE")
-            return 2
+                return open_profile_window()
+            except Exception:
+                print("BLOCKED — PROFILE_UI_UNAVAILABLE")
+                return 2
     return run_saved(args[0] if len(args) == 1 else "")
 
 

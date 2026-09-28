@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import sys
@@ -9,7 +10,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from aurum_worker import local_mt5_profile as local_profile
 from aurum_worker.adapters.windows_protection import (
+    MAX_PROTECTED_BYTES,
     ProtectionError,
     WindowsDataProtection,
 )
@@ -214,9 +217,67 @@ def test_real_dpapi_restart_roundtrip_and_tamper(tmp_path: Path) -> None:
         store.load()
 
 
+@pytest.mark.parametrize("runtime_platform", ["linux", "darwin"])
+@pytest.mark.parametrize("decrypt", [False, True])
 def test_protection_has_no_non_windows_fallback(
     monkeypatch: pytest.MonkeyPatch,
+    runtime_platform: str,
+    decrypt: bool,
 ) -> None:
-    monkeypatch.setattr(sys, "platform", "linux")
-    with pytest.raises(ProtectionError):
-        WindowsDataProtection().protect(b"synthetic")
+    calls: list[str] = []
+
+    def forbidden_dll(name: str, *, winmode: int) -> object:
+        calls.append(name)
+        raise AssertionError("No DLL may be loaded on a non-Windows platform.")
+
+    monkeypatch.setattr(sys, "platform", runtime_platform)
+    monkeypatch.setattr(ctypes, "WinDLL", forbidden_dll, raising=False)
+    protection = WindowsDataProtection()
+    with pytest.raises(ProtectionError, match="^PROFILE_PROTECTION_FAILED$"):
+        if decrypt:
+            protection.unprotect(b"synthetic")
+        else:
+            protection.protect(b"synthetic")
+    assert not calls
+
+
+@pytest.mark.parametrize(
+    "data", [b"", b"x" * (MAX_PROTECTED_BYTES + 1)], ids=["empty", "oversized"]
+)
+@pytest.mark.parametrize("decrypt", [False, True])
+def test_protection_rejects_invalid_size_before_loading_windows_dll(
+    monkeypatch: pytest.MonkeyPatch, data: bytes, decrypt: bool
+) -> None:
+    calls: list[str] = []
+
+    def forbidden_dll(name: str, *, winmode: int) -> object:
+        calls.append(name)
+        raise AssertionError("Invalid data must not reach Windows protection.")
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(ctypes, "WinDLL", forbidden_dll, raising=False)
+    protection = WindowsDataProtection()
+    with pytest.raises(ProtectionError, match="^PROFILE_PROTECTION_FAILED$"):
+        if decrypt:
+            protection.unprotect(data)
+        else:
+            protection.protect(data)
+    assert not calls
+
+
+@pytest.mark.parametrize("runtime_platform", ["linux", "darwin"])
+def test_default_profile_path_rejects_non_windows_before_constructing_path(
+    monkeypatch: pytest.MonkeyPatch, runtime_platform: str
+) -> None:
+    calls: list[str] = []
+
+    def forbidden_path(value: str) -> Path:
+        calls.append(value)
+        raise AssertionError("No local profile path may be constructed.")
+
+    monkeypatch.setattr(sys, "platform", runtime_platform)
+    monkeypatch.setenv("LOCALAPPDATA", "C:\\Synthetic Local Data")
+    monkeypatch.setattr(local_profile, "Path", forbidden_path)
+    with pytest.raises(ProfileError, match="^PROFILE_WINDOWS_ONLY$"):
+        local_profile.default_profile_path()
+    assert not calls

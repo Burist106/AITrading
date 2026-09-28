@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from mt5_factories import account
@@ -199,3 +201,33 @@ def test_status_is_not_current_verification(
 def test_unknown_exception_details_are_not_exposed() -> None:
     assert cli.safe_reason(RuntimeError("private detail")) == "PROFILE_FAILED"
     assert cli.safe_reason(ProfileError("private detail")) == "PROFILE_FAILED"
+
+
+@pytest.mark.parametrize("runtime_platform", ["linux", "darwin"])
+def test_gui_rejects_non_windows_before_importing_ui(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    runtime_platform: str,
+) -> None:
+    monkeypatch.setattr(sys, "platform", runtime_platform)
+    # An attempted UI import would fail and produce a different bounded result.
+    monkeypatch.setitem(sys.modules, "aurum_worker.mt5_profile_ui", None)
+    assert cli.main(["gui"]) == 2
+    assert capsys.readouterr().out == "BLOCKED — PROFILE_WINDOWS_ONLY\n"
+
+
+def test_gui_windows_branch_dispatches_only_to_explicit_fake_ui(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    fake_ui = ModuleType("aurum_worker.mt5_profile_ui")
+
+    def open_fake_window() -> int:
+        calls.append("fake-window")
+        return 0
+
+    monkeypatch.setattr(fake_ui, "open_profile_window", open_fake_window, raising=False)
+    monkeypatch.setitem(sys.modules, "aurum_worker.mt5_profile_ui", fake_ui)
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert cli.main(["gui"]) == 0
+    assert calls == ["fake-window"]

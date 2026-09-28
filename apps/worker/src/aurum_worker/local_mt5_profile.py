@@ -87,11 +87,12 @@ class LocalMt5Profile(BaseModel):
 def default_profile_path() -> Path:
     if sys.platform != "win32":
         raise ProfileError("PROFILE_WINDOWS_ONLY")
-    base = os.environ.get("LOCALAPPDATA", "")
-    path = Path(base)
-    if not base or not path.is_absolute() or len(path.drive) != 2:
-        raise ProfileError("PROFILE_LOCATION_INVALID")
-    return path / "Aurum" / "LocalDemo" / "mt5-profile.dpapi"
+    else:
+        base = os.environ.get("LOCALAPPDATA", "")
+        path = Path(base)
+        if not base or not path.is_absolute() or len(path.drive) != 2:
+            raise ProfileError("PROFILE_LOCATION_INVALID")
+        return path / "Aurum" / "LocalDemo" / "mt5-profile.dpapi"
 
 
 def reject_binding_environment() -> None:
