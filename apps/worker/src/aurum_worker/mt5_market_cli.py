@@ -1,7 +1,8 @@
-"""Explicit process-only, bound Pepperstone Demo market-time validation.
+"""Explicit process-only, bound Pepperstone Demo read-only validation.
 
-This is not a profile migration, provider discovery, transaction-time contract,
-or readiness grant. Raw diagnostic and legacy commands remain unchanged.
+Only the opted-in full smoke selects the accepted bounded transaction policy.
+This is not a profile migration, provider discovery or readiness grant.
+Raw diagnostic, market-only checks and legacy commands remain unchanged.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from aurum_worker.mt5_market_provider import PUBLIC_PROVIDER_FAILURE_DETAILS
 from aurum_worker.mt5_market_time import PEPPERSTONE_POLICY
 from aurum_worker.mt5_profile_cli import safe_reason
 from aurum_worker.mt5_transaction_inventory import InventoryLookback
+from aurum_worker.mt5_transaction_time import PEPPERSTONE_TRANSACTION_POLICY
 
 
 def _require_live(freshness: TickFreshness) -> None:
@@ -218,6 +220,9 @@ def main(arguments: list[str] | None = None) -> int:
             **{
                 **profile.worker_config(smoke=action == "smoke").model_dump(),
                 "market_time_policy": PEPPERSTONE_POLICY,
+                "transaction_time_policy": (
+                    PEPPERSTONE_TRANSACTION_POLICY if action == "smoke" else None
+                ),
             }
         )
         if action == "smoke":

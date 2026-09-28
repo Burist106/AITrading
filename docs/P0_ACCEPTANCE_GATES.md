@@ -4,12 +4,12 @@ These gates apply before any Demo broker execution is introduced.
 
 `[x]` means verified for the identified implementation. `[ ]` means deliberately pending. Milestone 2 is **COMPLETE WITH DOCUMENTED LIMITATIONS**: the final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02, with `quality`, `database`, and `windows-mt5-boundary` green on implementation commit `3e25007`. The milestone remains read-only and does not authorize execution. The checks below retain their identified release scope; they do not certify the current Milestone 3 changes.
 
-Milestone 3 is **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE BLOCKED**, authorized on 2026-09-22. Runtime, baseline/risk/eligibility, immutable Shadow storage and authenticated read-only pages are now connected in code and tested using constructed evidence. Genuine external providers/configuration and native acceptance remain pending. See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md).
+Milestone 3 is **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE PENDING**, authorized on 2026-09-22. Runtime, baseline/risk/eligibility, immutable Shadow storage and authenticated read-only pages are connected in code and tested using constructed evidence. On 2026-09-28 the user accepted the existing time references and authorized a [bounded transaction policy](MT5_TRANSACTION_TIME_POLICY.md), replacing the demand for further native timestamp proof with an explicit implementation contract. A subsequent explicitly authorized complete native read-only smoke passed; genuine external providers/configuration and hosted end-to-end acceptance remain pending. See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md).
 
 ## Milestone 3 delivery gates
 
-- [ ] Resolve and verify the native transaction timestamp/query contract, preserving the current fail-closed gate until evidence supports it
-- [ ] Obtain a complete opted-in native read-only smoke pass; the later attempt remains blocked and no native smoke was rerun for this implementation
+- [x] Implement the operator-accepted bounded Pepperstone transaction timestamp/query contract with deterministic regression checks; retain fail-closed behavior for unsupported configurations, periods and data
+- [x] Obtain a complete opted-in native read-only smoke pass; the 2026-09-28 follow-up returned `PASSED — REAL MT5 READ-ONLY SMOKE`, exit `0`, including reconciliation and shutdown; historical attempts remain unchanged
 - [x] Integrate market, feature, eligibility and risk code into serialized polling with a versioned research baseline and traceable non-executable proposals; constructed-input tests are not native acceptance
 - [x] Implement immutable Shadow decisions/outcomes, owner-scoped RPC/read models and actual dashboard routes; local SQL/contract checks are not hosted deployment
 - [ ] Supply genuine source-bound equity/ledger/baseline, calendar, cost and safety evidence and a provisioned authenticated hosted connection

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from aurum_worker import shadow_cli
+from aurum_worker.models.mt5 import Mt5WorkerConfig
 
 
 def test_no_opt_in_never_builds_runtime(
@@ -82,9 +83,7 @@ def test_explicit_archive_path_required_before_transport_or_native_creation(
 
     _, config = market_service()
     config = config.model_copy(update={"terminal_path": Path("C:/test/terminal64.exe")})
-    monkeypatch.setattr(
-        shadow_cli.Mt5WorkerConfig, "from_environ", lambda _values: config
-    )
+    monkeypatch.setattr(Mt5WorkerConfig, "from_environ", lambda _values: config)
 
     def forbidden(*args: object, **kwargs: object) -> None:
         raise AssertionError("no native/transport without an archive path")

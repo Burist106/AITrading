@@ -1,5 +1,17 @@
 # Bootstrap Design Traceability
 
+## Milestone 2 read-boundary follow-up (2026-09-28)
+
+The operator-accepted [bounded transaction policy](MT5_TRANSACTION_TIME_POLICY.md) maps to `mt5_transaction_time.py`, explicit Worker configuration, guarded native collection normalization and Shadow source-version checks. Integer history transports never replace domain UTC timestamps. This addresses the requested read-support implementation without adding broker controls or claiming an unrun native smoke passed.
+
+The subsequent default-UTC transaction hardening maps to native integer time-pair validation, exact millisecond preservation, event chronology and conservative explicit expiration modes. `test_mt5_transaction_normalization.py` covers malformed/future events and subsecond history boundaries. Existing health evidence cannot silently round a returned event into its query window. No UI, schema, native-call allowlist, Pepperstone production mapping or eligibility gate changed.
+
+The later [Position link diagnostic](MT5_POSITION_TIME_LINKS.md) maps independently supplied terminal display references to existing native Position/Order/Deal identity and time fields. It is a local CLI only, with a count-only non-eligible result and unchanged runtime transaction gates. No screen control, execution capability, production health promotion or copied prototype is introduced.
+
+The subsequent transaction-time diagnostic maps to `mt5_transaction_probe.py`, its explicit local CLI and the serialized native adapter. Its count/boolean-only report cannot feed normalized transaction observations, health promotion or trading eligibility. The [probe contract](MT5_TRANSACTION_TIME_PROBE.md) distinguishes actual sample observations from unresolved production time semantics.
+
+The handoff's current-state, Demo-only and fail-closed health requirements map to strict native trade-mode/tick-pair validation, bounded reconciliation/polling context rechecks and decision-time quote aging. Regression coverage lives in `test_mt5_observation_consistency.py`, `test_mt5_polling_consistency.py` and the full-smoke candle tests. Existing components and visual tokens are unchanged. This strengthens evidence used by health displays and Shadow consumers; it introduces no execution controls, prototype imports or native transaction-time claim.
+
 ## Milestone 3 integrated Shadow code (2026-09-22)
 
 The reproducibility gate now also maps to `shadow/replay.py`, `replay_archive.py` and the local-only `shadow_replay_cli.py`. The Worker must archive each reached risk input/cycle before its remote write; historical risk and eligibility can be checked without MT5. CLI status is explicitly local and does not imply current health, source authenticity, remote persistence or execution permission. See [the replay boundaries](SHADOW_REPLAY.md).

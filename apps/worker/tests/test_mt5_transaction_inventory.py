@@ -150,12 +150,16 @@ def test_inventory_rejects_invalid_or_oversized_results(
 
 def test_inventory_query_is_an_explicit_hypothesis_envelope(tmp_path: Path) -> None:
     class CapturingFake(NativeModuleFake):
-        def history_orders_get(self, start: datetime, end: datetime) -> object:
+        def history_orders_get(
+            self, start: datetime | int, end: datetime | int
+        ) -> object:
             assert start == NOW - timedelta(days=7)
             assert end == NOW + timedelta(hours=3)
             return super().history_orders_get(start, end)
 
-        def history_deals_get(self, start: datetime, end: datetime) -> object:
+        def history_deals_get(
+            self, start: datetime | int, end: datetime | int
+        ) -> object:
             assert start == NOW - timedelta(days=7)
             assert end == NOW + timedelta(hours=3)
             return super().history_deals_get(start, end)
@@ -250,12 +254,16 @@ def test_explicit_thirty_day_inventory_keeps_unverified_contract(
     tmp_path: Path,
 ) -> None:
     class OlderHistoryFake(NativeModuleFake):
-        def history_orders_get(self, start: datetime, end: datetime) -> object:
+        def history_orders_get(
+            self, start: datetime | int, end: datetime | int
+        ) -> object:
             assert start == NOW - timedelta(days=30)
             assert end == NOW + timedelta(hours=3)
             return super().history_orders_get(start, end)
 
-        def history_deals_get(self, start: datetime, end: datetime) -> object:
+        def history_deals_get(
+            self, start: datetime | int, end: datetime | int
+        ) -> object:
             assert start == NOW - timedelta(days=30)
             assert end == NOW + timedelta(hours=3)
             return super().history_deals_get(start, end)
@@ -292,8 +300,8 @@ def test_thirty_day_inventory_cannot_cross_policy_start(tmp_path: Path) -> None:
 
 def test_inventory_rejects_iterator_without_consuming_it(tmp_path: Path) -> None:
     def forbidden_iterator() -> Iterator[None]:
+        yield from ()
         raise AssertionError("Unbounded iterator must never be consumed")
-        yield None
 
     module = NativeModuleFake()
     module.position_result = forbidden_iterator()
@@ -308,7 +316,9 @@ def test_last_read_binding_change_discards_entire_inventory(
     tmp_path: Path, kind: str
 ) -> None:
     class ChangedLastFake(NativeModuleFake):
-        def history_deals_get(self, start: datetime, end: datetime) -> object:
+        def history_deals_get(
+            self, start: datetime | int, end: datetime | int
+        ) -> object:
             result = super().history_deals_get(start, end)
             change_binding(self, kind)
             return result

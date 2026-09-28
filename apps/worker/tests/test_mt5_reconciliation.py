@@ -27,6 +27,7 @@ from aurum_worker.adapters.persistence_mt5 import (
     InMemoryMt5ObservationPersistence,
     WorkerRpcMt5ObservationPersistence,
 )
+from aurum_worker.adapters.protocols import Mt5ReadPort
 from aurum_worker.models.mt5 import (
     AccountTradeMode,
     ComponentHeartbeat,
@@ -153,10 +154,10 @@ class DownHeartbeatTransportClient:
 
 def service(
     *,
-    adapter=None,
+    adapter: Mt5ReadPort | None = None,
     persistence: InMemoryMt5ObservationPersistence | None = None,
     worker_config: Mt5WorkerConfig | None = None,
-    identifier_factory=None,
+    identifier_factory: Callable[[], str] | None = None,
 ) -> tuple[ReadOnlyReconciliationService, InMemoryMt5ObservationPersistence]:
     store = persistence
     if store is None:
@@ -174,12 +175,12 @@ def service(
 
 
 def poller(
-    adapter,
+    adapter: Mt5ReadPort,
     store: InMemoryMt5ObservationPersistence,
     reconciler: ReadOnlyReconciliationService,
     *,
-    clock=None,
-    monotonic_clock=None,
+    clock: Callable[[], datetime] | None = None,
+    monotonic_clock: Callable[[], float] | None = None,
     worker_config: Mt5WorkerConfig | None = None,
 ) -> ReadOnlyPollingService:
     return ReadOnlyPollingService(
@@ -612,7 +613,8 @@ def test_stale_tick_blocks_and_symbol_state_changes_are_observed() -> None:
     assert raised.value.error.reason_code is Mt5ReasonCode.SYMBOL_NOT_VISIBLE
     assert "Market Watch" in raised.value.error.safe_detail
     assert len(store.symbols) == 2
-    assert store.symbols[-1].usability_state is SymbolUsabilityState.NOT_VISIBLE
+    unusable_symbol = store.symbols[-1]
+    assert unusable_symbol.usability_state is SymbolUsabilityState.NOT_VISIBLE
 
     with pytest.raises(Mt5ReadFailure):
         reconciler.run(trace_id="trace-unusable-symbol-repeated")
@@ -623,7 +625,8 @@ def test_stale_tick_blocks_and_symbol_state_changes_are_observed() -> None:
         HealthState.HEALTHY
     )
     assert len(store.symbols) == 3
-    assert store.symbols[-1].usability_state is SymbolUsabilityState.USABLE
+    restored_symbol = store.symbols[-1]
+    assert restored_symbol.usability_state is SymbolUsabilityState.USABLE
 
 
 def test_reconciliation_report_replay_is_idempotent() -> None:
@@ -659,6 +662,12 @@ def test_short_tick_poll_has_no_history_or_reconciliation_run() -> None:
         "get_terminal_info",
         "get_account_info",
         "get_latest_tick",
+        "get_terminal_info",
+        "get_account_info",
+        "get_terminal_info",
+        "get_account_info",
+        "get_terminal_info",
+        "get_account_info",
     ]
     assert len(store.reports) == report_count
     assert len(store.ticks) == 1
@@ -710,16 +719,19 @@ def test_light_tick_recovery_requests_full_without_restoring_healthy() -> None:
 
     blocked = polling.run_once()
     assert blocked.health.state is HealthState.BLOCKED
-    assert polling.state.reconciliation_required is False
+    blocked_state = polling.state
+    assert blocked_state.reconciliation_required is False
 
     adapter.replace_tick("XAUUSD", tick(TickFreshness.LIVE))
     assert polling.run_tick_once() is True
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reconciliation_required is True
+    recovered_tick_state = polling.state
+    assert recovered_tick_state.health_state is HealthState.BLOCKED
+    assert recovered_tick_state.reconciliation_required is True
 
     restored = polling.run_once()
     assert restored.health.state is HealthState.HEALTHY
-    assert polling.state.health_state is HealthState.HEALTHY
+    restored_state = polling.state
+    assert restored_state.health_state is HealthState.HEALTHY
     polling.stop()
 
 
@@ -794,13 +806,15 @@ def test_short_tick_account_policy_clears_prior_healthy_immediately(
     reconciler, _ = service(adapter=adapter, persistence=store)
     polling = poller(adapter, store, reconciler)
     polling.run_once()
-    assert polling.state.health_state is HealthState.HEALTHY
+    initial_state = polling.state
+    assert initial_state.health_state is HealthState.HEALTHY
     adapter.accounts = (account(mode),)
 
     assert polling.run_tick_once() is False
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reason_code is reason
-    assert polling.state.reconciliation_required is True
+    failed_state = polling.state
+    assert failed_state.health_state is HealthState.BLOCKED
+    assert failed_state.reason_code is reason
+    assert failed_state.reconciliation_required is True
     assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
         ComponentHeartbeatState.FAILED
     )
@@ -821,7 +835,8 @@ def test_short_tick_identity_or_broker_gap_clears_prior_healthy_immediately(
     reconciler, _ = service(adapter=adapter, persistence=store)
     polling = poller(adapter, store, reconciler)
     polling.run_once()
-    assert polling.state.health_state is HealthState.HEALTHY
+    initial_state = polling.state
+    assert initial_state.health_state is HealthState.HEALTHY
     if missing_broker:
         polling._broker_symbol = None
     else:
@@ -832,9 +847,10 @@ def test_short_tick_identity_or_broker_gap_clears_prior_healthy_immediately(
         )
 
     assert polling.run_tick_once() is False
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
-    assert polling.state.reconciliation_required is True
+    failed_state = polling.state
+    assert failed_state.health_state is HealthState.BLOCKED
+    assert failed_state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+    assert failed_state.reconciliation_required is True
     polling.stop()
 
 
@@ -848,15 +864,24 @@ def test_position_poll_is_separate_and_changed_set_requires_full() -> None:
     adapter.call_log.clear()
 
     assert polling.run_position_once() is True
-    assert adapter.call_log == ["get_open_positions", "get_active_orders"]
+    assert adapter.call_log == [
+        "get_terminal_info",
+        "get_account_info",
+        "get_open_positions",
+        "get_active_orders",
+        "get_terminal_info",
+        "get_account_info",
+    ]
     assert len(store.reports) == report_count
-    assert polling.state.reconciliation_required is False
+    unchanged_state = polling.state
+    assert unchanged_state.reconciliation_required is False
 
     adapter.positions = (position(),)
     assert polling.run_position_once() is False
-    assert polling.state.reconciliation_required is True
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+    changed_state = polling.state
+    assert changed_state.reconciliation_required is True
+    assert changed_state.health_state is HealthState.BLOCKED
+    assert changed_state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
     assert len(store.reports) == report_count
     polling.stop()
 
@@ -892,15 +917,17 @@ def test_reconnect_requires_full_reconciliation_before_healthy_returns() -> None
     reconciler, _ = service(adapter=adapter, persistence=store)
     polling = poller(adapter, store, reconciler)
     polling.run_once()
-    assert polling.state.health_state is HealthState.HEALTHY
+    initial_state = polling.state
+    assert initial_state.health_state is HealthState.HEALTHY
 
     adapter.failures["get_terminal_info"] = Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE
     with pytest.raises(Mt5ReadFailure) as raised:
         polling.run_tick_once()
     polling._handle_failure(raised.value, "reconnect-failure")
-    assert polling.state.connected is False
-    assert polling.state.reconciliation_required is True
-    assert polling.state.health_state is HealthState.UNAVAILABLE
+    failed_state = polling.state
+    assert failed_state.connected is False
+    assert failed_state.reconciliation_required is True
+    assert failed_state.health_state is HealthState.UNAVAILABLE
     assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
         ComponentHeartbeatState.FAILED
     )
@@ -919,8 +946,9 @@ def test_reconnect_requires_full_reconciliation_before_healthy_returns() -> None
 
     adapter.failures.clear()
     assert polling.run_due_once() == "full"
-    assert polling.state.reconciliation_required is False
-    assert polling.state.health_state is HealthState.HEALTHY
+    restored_state = polling.state
+    assert restored_state.reconciliation_required is False
+    assert restored_state.health_state is HealthState.HEALTHY
     polling.stop()
 
 
@@ -1138,13 +1166,15 @@ def test_started_poller_can_publish_worker_healthy_only_while_running() -> None:
         ]
         assert healthy_publications
         assert all(healthy_publications)
-        assert polling.state.running is True
+        started_state = polling.state
+        assert started_state.running is True
         market_before_stop = store.heartbeats[Mt5ComponentCode.MARKET_DATA]
     finally:
         polling.stop(timeout_seconds=2)
 
     stopped_publication_count = len(store.worker_publications)
-    assert polling.state.running is False
+    stopped_state = polling.state
+    assert stopped_state.running is False
     stopped_worker, running_when_stopped = store.worker_publications[-1]
     assert running_when_stopped is False
     assert stopped_worker.state is ComponentHeartbeatState.FAILED
@@ -1388,26 +1418,24 @@ def test_reconciliation_required_caps_worker_until_a_new_full_cycle() -> None:
             and monotonic() < deadline
         ):
             Event().wait(0.025)
-        assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
-            ComponentHeartbeatState.HEALTHY
-        )
+        initial_worker = store.heartbeats[Mt5ComponentCode.WORKER]
+        assert initial_worker.state is ComponentHeartbeatState.HEALTHY
 
         polling.request_full_reconciliation()
         assert polling.run_tick_once() is True
-        assert polling.state.reconciliation_required is True
-        assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
-            ComponentHeartbeatState.FAILED
-        )
-        assert store.heartbeats[Mt5ComponentCode.WORKER].detail is (
-            Mt5ReasonCode.RECONCILIATION_INCOMPLETE
-        )
+        tick_state = polling.state
+        assert tick_state.reconciliation_required is True
+        requested_worker = store.heartbeats[Mt5ComponentCode.WORKER]
+        assert requested_worker.state is ComponentHeartbeatState.FAILED
+        assert requested_worker.detail is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
         assert store.heartbeats[Mt5ComponentCode.MARKET_DATA].state is (
             ComponentHeartbeatState.HEALTHY
         )
 
         heartbeat_count = len(store.heartbeat_history)
         assert polling.run_position_once() is True
-        assert polling.state.reconciliation_required is True
+        position_state = polling.state
+        assert position_state.reconciliation_required is True
         assert len(store.heartbeat_history) == heartbeat_count + 2
         assert store.heartbeat_history[-2].component_code is (
             Mt5ComponentCode.MT5_ADAPTER
@@ -1415,10 +1443,10 @@ def test_reconciliation_required_caps_worker_until_a_new_full_cycle() -> None:
         assert store.heartbeat_history[-1].component_code is Mt5ComponentCode.WORKER
 
         assert polling.run_once().health.state is HealthState.HEALTHY
-        assert polling.state.reconciliation_required is False
-        assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
-            ComponentHeartbeatState.HEALTHY
-        )
+        restored_state = polling.state
+        assert restored_state.reconciliation_required is False
+        restored_worker = store.heartbeats[Mt5ComponentCode.WORKER]
+        assert restored_worker.state is ComponentHeartbeatState.HEALTHY
     finally:
         polling.stop(timeout_seconds=2)
 

@@ -406,10 +406,15 @@ class ShadowMarketService:
             positions = self._adapter.get_open_positions(trace_id=trace_id)
             active_orders = self._adapter.get_active_orders(trace_id=trace_id)
             position_check_at = self._clock()
+            expected_transaction_version = (
+                account.adapter_version
+                if self._config.transaction_time_policy is None
+                else f"{account.adapter_version}:{self._config.transaction_time_policy}"
+            )
             _require(
                 all(
                     item.source == "mt5"
-                    and item.adapter_version == account.adapter_version
+                    and item.adapter_version == expected_transaction_version
                     and _current(item.observed_at, position_check_at)
                     for item in (*positions, *active_orders)
                 ),

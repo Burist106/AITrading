@@ -910,13 +910,19 @@ def test_policy_activation_binding_and_confirmation_are_not_inferred() -> None:
 def test_actual_reconciler_contract_with_advancing_clock_and_distinct_version() -> None:
     value = _input()
     ticks = count()
+    adapter = fake_adapter()
+    # The captured tick must precede the deliberately earlier reconciliation
+    # clock; a future observation timestamp is not valid evidence.
+    adapter.ticks["XAUUSD"] = adapter.ticks["XAUUSD"].model_copy(
+        update={"observed_at": NOW - timedelta(seconds=1)}
+    )
 
     def clock() -> datetime:
         return NOW - timedelta(seconds=1) + timedelta(microseconds=next(ticks))
 
     report = (
         ReadOnlyReconciliationService(
-            fake_adapter(),
+            adapter,
             InMemoryMt5ObservationPersistence(
                 database_state=DatabaseReconciliationState(
                     account_fingerprint=value.provenance.account_fingerprint,

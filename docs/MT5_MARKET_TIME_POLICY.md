@@ -2,9 +2,11 @@
 
 Status: **LOCAL CODE CHECKS AND BOUNDED NATIVE MARKET CHECK PASSED; NOT MILESTONE 3 READINESS**.
 
+On 2026-09-28 the user accepted the existing time references and authorized a [separate bounded transaction policy](MT5_TRANSACTION_TIME_POLICY.md) without further native timestamp proof. The market-only contract below remains unchanged when that separate policy is absent. The full smoke command now explicitly selects both policies; ordinary market checks and diagnostics do not. The subsequently authorized native full smoke passed with exit `0`; see [current readiness](MILESTONE_3_READINESS.md). Historical blocked smoke results below remain historical, not current failures or relabeled passes.
+
 This follow-up implements a bounded correction for the independently selected Pepperstone Demo market-data source. It does not introduce a general broker timezone override or complete the transaction-time contract. Its original authorization did not start Milestone 3. `DEMO_ONLY`, `SHADOW`, existing account/specification confirmations, and the native read-only allowlist remain mandatory.
 
-The user separately authorized the real Demo/Shadow implementation on 2026-09-22. Milestone 3 is **IN PROGRESS — PRODUCTION DEMO/SHADOW COMPONENTS; NOT COMPLETE**: production market normalization, feature, and deterministic risk components have been added, while runtime orchestration, baseline strategy/Shadow proposals, durable persistence/journal, and dashboard integration remain pending. See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md). Native smoke was not rerun for that implementation, and its authorization does not change this policy's coverage or unblock transaction reads.
+The user separately authorized the real Demo/Shadow implementation on 2026-09-22. Milestone 3 is **IN PROGRESS — PRODUCTION DEMO/SHADOW COMPONENTS; NOT COMPLETE**: market normalization, features, deterministic risk, runtime orchestration, baseline Shadow research, persistence/journal, local replay and authenticated dashboard are connected in code. Genuine external providers, hosted setup and real-source acceptance remain pending. See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md). Its authorization does not change this policy's coverage or unblock transaction reads; the later transaction probe is diagnostic evidence, not a native full-smoke pass.
 
 ## Evidence and interpretation
 
@@ -75,11 +77,13 @@ pnpm worker:mt5:market:smoke --confirm-pepperstone-demo
 
 It additionally requires `AURUM_MT5_READONLY_SMOKE=1` only in the invocation's process, never in the saved profile or persistent configuration. Without that consent it reports `NOT RUN` before loading the profile or contacting MT5. The market check rejects that smoke flag rather than silently becoming a smoke run.
 
-With opt-in, the smoke follows the existing complete workflow; it does not skip transaction or reconciliation stages to obtain a pass. Under this market-only policy, `get_open_positions`, `get_active_orders`, `get_order_history`, and `get_deal_history` fail with `RECONCILIATION_INCOMPLETE` before their native reads. Even a potentially empty result cannot validate an unproven timestamp or query contract. A smoke may block earlier on other safety gates; this policy cannot yield a full smoke pass.
+With opt-in, the smoke follows the existing complete workflow; it does not skip transaction or reconciliation stages to obtain a pass. Since the 2026-09-28 accepted-contract implementation, this explicit smoke action also selects the separately versioned transaction policy. Market-only configuration without that policy still blocks all four transaction methods before native reads. Selecting the transaction policy does not waive account/specification checks, unsupported time ranges or reconciliation mismatches, and it does not itself constitute a smoke pass.
 
 No password, login call, account switch, Market Watch mutation, broker write, Position modification, command consumer, or trading action is added. No support request is drafted or sent by these commands.
 
-## Verification and remaining work
+## Historical market-only verification and remaining work
+
+This subsection records the earlier market-only checkpoint. The later accepted transaction implementation, native smoke pass and explicit commit/push authorization are recorded at the top of the readiness report; they supersede the pending implementation/smoke and publication restrictions of this historical checkpoint, not its actual results.
 
 The new fake-backed suites exercise conversion, strict scalars, native-shaped arrays, preserved freshness thresholds, coverage boundaries, full candle intervals, before/after binding changes, range arguments/results, and transaction-read rejection. Such tests demonstrate implementation behavior, not a real broker contract or real-terminal pass.
 
@@ -92,6 +96,8 @@ Actual native attempts and their sanitized outputs, exit codes and shutdown evid
 Remaining native readiness requirements include an independently supported transaction timestamp and query-boundary contract, safe reviewed implementation for every consumed field, a complete opted-in read-only smoke, and all required current-patch checks and review. Milestone 3 implementation is separately authorized and in progress; that is not evidence of native readiness or milestone completion. Keep [PR #2](https://github.com/Burist106/AITrading/pull/2) in Draft; no automatic commit, push, merge, or branch deletion is authorized. See [Milestone 3 readiness](MILESTONE_3_READINESS.md).
 
 ### Evidence needed for the complete transaction contract
+
+After the operator supplied existing nonempty Demo history, a separate [bounded transaction-time probe](MT5_TRANSACTION_TIME_PROBE.md) was added for fixed hypothesis/boundary comparisons. It retains all production transaction gates and the unverified-contract result. The count-only inventory below remains unchanged.
 
 The authorized follow-up adds an evidence-availability diagnostic:
 

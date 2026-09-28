@@ -28,7 +28,7 @@ from aurum_worker.models.mt5 import (
     SafeMt5Error,
     TickFreshness,
 )
-from aurum_worker.mt5_safety import verify_account
+from aurum_worker.mt5_safety import decision_tick_state, verify_account
 from aurum_worker.reconciliation import (
     ReadOnlyReconciliationService,
     ReconciliationResult,
@@ -459,7 +459,11 @@ class ReadOnlyPollingService:
             self._next_full_at = now + float(self._config.full_reconciliation_seconds)
 
     def _run_full_cycle(self, trace_id: str) -> ReconciliationResult:
-        result = self._reconciliation.run(trace_id=trace_id)
+        try:
+            result = self._reconciliation.run(trace_id=trace_id)
+        except Mt5ReadFailure as failure:
+            self._invalidate_read_failure(failure)
+            raise
         self._accept_full_result(result)
         self._emit_component_heartbeats(trace_id=trace_id)
         if self._on_full_cycle is not None:
@@ -479,21 +483,39 @@ class ReadOnlyPollingService:
         with self._lock:
             self._reconciliation_required = True
 
-    def run_tick_once(self, *, trace_id: str | None = None) -> bool:
-        """Read only terminal/account/tick state; never query history."""
-
-        self._ensure_active()
-        trace_id = trace_id or self._trace_factory()
-        terminal = self._adapter.get_terminal_info(trace_id=trace_id)
-        if not terminal.connected:
-            raise Mt5ReadFailure(
-                SafeMt5Error(
-                    reason_code=Mt5ReasonCode.TERMINAL_DISCONNECTED,
-                    safe_detail="Terminal reported a disconnected state.",
-                    retryable=True,
-                )
+    def _invalidate_read_failure(self, failure: Mt5ReadFailure) -> None:
+        # Direct/manual callers must not retain cached Healthy state on a failed
+        # read. The background loop owns reconnect/backoff and failed publication.
+        with self._lock:
+            self._connected = False
+            self._reconciliation_required = True
+            self._last_tick_freshness = None
+            self._lower_worker_state_locked(
+                HealthState.UNAVAILABLE, failure.error.reason_code
             )
-        account = self._adapter.get_account_info(trace_id=trace_id)
+
+    def _check_current_account(
+        self,
+        *,
+        trace_id: str,
+        components: tuple[Mt5ComponentCode, ...],
+    ) -> AccountObservation | None:
+        """Check each light read against the identity accepted by the full cycle."""
+
+        try:
+            terminal = self._adapter.get_terminal_info(trace_id=trace_id)
+            if not terminal.connected:
+                raise Mt5ReadFailure(
+                    SafeMt5Error(
+                        reason_code=Mt5ReasonCode.TERMINAL_DISCONNECTED,
+                        safe_detail="Terminal reported a disconnected state.",
+                        retryable=True,
+                    )
+                )
+            account = self._adapter.get_account_info(trace_id=trace_id)
+        except Mt5ReadFailure as failure:
+            self._invalidate_read_failure(failure)
+            raise
         verification = verify_account(
             account, self._config.expected_account_fingerprint
         )
@@ -507,14 +529,15 @@ class ReadOnlyPollingService:
                 or account.account_fingerprint != self._account_fingerprint
                 or account.server_fingerprint != self._server_fingerprint
             )
-            broker_symbol = self._broker_symbol
             verification_changed = (
                 prior_verification_state is None
                 or verification.state is not prior_verification_state
             )
-            prior_health_state = self._health_state
-            prior_reason = self._reason_code
-        if account_changed or verification_changed:
+        if (
+            account_changed
+            or verification_changed
+            or verification.state not in _DEMO_VERIFICATION_STATES
+        ):
             with self._lock:
                 state = (
                     verification.health_state
@@ -529,16 +552,26 @@ class ReadOnlyPollingService:
                 self._lower_worker_state_locked(state, reason)
                 self._reconciliation_required = True
                 self._last_tick_freshness = None
-            self._emit_component_heartbeats(trace_id=trace_id)
+            self._emit_component_heartbeats(
+                trace_id=trace_id, components=components, failure_reason=reason
+            )
+            return None
+        return account
+
+    def run_tick_once(self, *, trace_id: str | None = None) -> bool:
+        """Read only terminal/account/tick state; never query history."""
+
+        self._ensure_active()
+        trace_id = trace_id or self._trace_factory()
+        account = self._check_current_account(
+            trace_id=trace_id, components=_ALL_COMPONENTS
+        )
+        if account is None:
             return False
-        if verification.state not in _DEMO_VERIFICATION_STATES:
-            with self._lock:
-                self._lower_worker_state_locked(
-                    verification.health_state, verification.reason_code
-                )
-                self._last_tick_freshness = None
-            self._emit_component_heartbeats(trace_id=trace_id)
-            return False
+        with self._lock:
+            broker_symbol = self._broker_symbol
+            prior_health_state = self._health_state
+            prior_reason = self._reason_code
         if broker_symbol is None:
             with self._lock:
                 if (
@@ -551,12 +584,62 @@ class ReadOnlyPollingService:
                 self._last_tick_freshness = None
             self._emit_component_heartbeats(trace_id=trace_id)
             return False
-        tick = self._adapter.get_latest_tick(broker_symbol, trace_id=trace_id)
+        try:
+            tick = self._adapter.get_latest_tick(broker_symbol, trace_id=trace_id)
+        except Mt5ReadFailure as failure:
+            self._invalidate_read_failure(failure)
+            raise
+        if (
+            self._check_current_account(trace_id=trace_id, components=_ALL_COMPONENTS)
+            is None
+        ):
+            return False
         self._persistence.upsert_tick(tick, account.account_fingerprint)
+        if (
+            self._check_current_account(trace_id=trace_id, components=_ALL_COMPONENTS)
+            is None
+        ):
+            return False
+        accepted = self._apply_tick_state(tick)
+        self._emit_component_heartbeats(trace_id=trace_id)
+        if not accepted:
+            return False
+        # Heartbeats are blocking writes too. Recheck once after publication,
+        # before dispatch; a corrective failed batch is never recursively retried.
+        if (
+            self._check_current_account(trace_id=trace_id, components=_ALL_COMPONENTS)
+            is None
+        ):
+            return False
+        accepted = self._apply_tick_state(tick)
+        if not accepted:
+            self._emit_component_heartbeats(trace_id=trace_id)
+        elif self._on_tick is not None:
+            self._on_tick(tick, account)
+        return accepted
+
+    def _apply_tick_state(self, tick: LatestTickObservation) -> bool:
+        # Persistence can itself stall. Keep the original observation immutable,
+        # but do not renew liveness or call consumers using its cached age.
+        try:
+            freshness, _age = decision_tick_state(
+                tick,
+                now=self._clock(),
+                max_tick_age_seconds=self._config.max_tick_age_seconds,
+                max_clock_drift_seconds=self._config.max_clock_drift_seconds,
+            )
+        except Mt5ReadFailure as failure:
+            with self._lock:
+                self._reconciliation_required = True
+                self._last_tick_freshness = None
+                self._lower_worker_state_locked(
+                    HealthState.BLOCKED, failure.error.reason_code
+                )
+            raise
         with self._lock:
             prior_tick_freshness = self._last_tick_freshness
-            self._last_tick_freshness = tick.freshness
-            if tick.freshness is not TickFreshness.LIVE:
+            self._last_tick_freshness = freshness
+            if freshness is not TickFreshness.LIVE:
                 state, reason = {
                     TickFreshness.DELAYED: (
                         HealthState.DEGRADED,
@@ -574,9 +657,9 @@ class ReadOnlyPollingService:
                         HealthState.BLOCKED,
                         Mt5ReasonCode.TICK_UNAVAILABLE,
                     ),
-                }[tick.freshness]
+                }[freshness]
                 self._lower_worker_state_locked(state, reason)
-                if tick.freshness is not prior_tick_freshness:
+                if freshness is not prior_tick_freshness:
                     self._reconciliation_required = True
                 accepted = False
             else:
@@ -589,24 +672,39 @@ class ReadOnlyPollingService:
                     # restore Healthy from the lightweight path.
                     self._reconciliation_required = True
                 accepted = True
-        self._emit_component_heartbeats(trace_id=trace_id)
-        if self._on_tick is not None:
-            self._on_tick(tick, account)
         return accepted
 
     def run_position_once(self, *, trace_id: str | None = None) -> bool:
         """Read current Position/Order sets without history or report creation."""
 
         self._ensure_active()
+        trace_id = trace_id or self._trace_factory()
+        if (
+            self._check_current_account(
+                trace_id=trace_id, components=_POSITION_COMPONENTS
+            )
+            is None
+        ):
+            return False
         with self._lock:
             if (
                 self._account_verification_state not in _DEMO_VERIFICATION_STATES
                 or self._broker_symbol is None
             ):
                 return True
-        trace_id = trace_id or self._trace_factory()
-        positions = self._adapter.get_open_positions(trace_id=trace_id)
-        orders = self._adapter.get_active_orders(trace_id=trace_id)
+        try:
+            positions = self._adapter.get_open_positions(trace_id=trace_id)
+            orders = self._adapter.get_active_orders(trace_id=trace_id)
+        except Mt5ReadFailure as failure:
+            self._invalidate_read_failure(failure)
+            raise
+        if (
+            self._check_current_account(
+                trace_id=trace_id, components=_POSITION_COMPONENTS
+            )
+            is None
+        ):
+            return False
         position_tickets = frozenset(position.ticket for position in positions)
         order_tickets = frozenset(order.ticket for order in orders)
         with self._lock:
@@ -715,12 +813,16 @@ class ReadOnlyPollingService:
             )
         return self._cancel.wait(max(0.0, deadline - now))
 
+    def _reconciliation_is_required(self) -> bool:
+        # Callbacks and other threads may change this flag between light cycles.
+        # Each call is a fresh locked snapshot, not a narrowed prior observation.
+        with self._lock:
+            return self._reconciliation_required
+
     def _run(self) -> None:
         try:
             while not self._cancel.is_set():
-                with self._lock:
-                    reconciliation_required = self._reconciliation_required
-                if reconciliation_required:
+                if self._reconciliation_is_required():
                     trace_id = self._trace_factory()
                     try:
                         self._run_full_cycle(trace_id)
@@ -740,17 +842,15 @@ class ReadOnlyPollingService:
                     if now >= self._next_tick_at:
                         self.run_tick_once(trace_id=trace_id)
                         self._next_tick_at = now + float(self._config.tick_poll_seconds)
-                    with self._lock:
-                        if self._reconciliation_required:
-                            continue
+                    if self._reconciliation_is_required():
+                        continue
                     if now >= self._next_position_at:
                         self.run_position_once(trace_id=trace_id)
                         self._next_position_at = now + float(
                             self._config.position_poll_seconds
                         )
-                    with self._lock:
-                        if self._reconciliation_required:
-                            continue
+                    if self._reconciliation_is_required():
+                        continue
                 except Mt5ReadFailure as failure:
                     self._handle_failure(failure, trace_id)
                     if self._cancel.wait(float(self._next_reconnect)):

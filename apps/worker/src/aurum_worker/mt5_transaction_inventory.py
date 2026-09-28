@@ -61,7 +61,7 @@ class TransactionInventory(BaseModel):
 def _valid_integer(value: object) -> TypeGuard[Integral]:
     # Validate shape only. A valid integer does not establish event time or UTC.
     return (
-        isinstance(value, Integral) and not isinstance(value, bool) and int(value) >= 0
+        not isinstance(value, bool) and isinstance(value, Integral) and int(value) >= 0
     )
 
 

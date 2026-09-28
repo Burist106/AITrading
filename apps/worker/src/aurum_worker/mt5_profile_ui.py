@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import io
 import tkinter as tk
+from collections.abc import Callable
 from contextlib import redirect_stdout
 from functools import partial
 from tkinter import filedialog, messagebox, ttk
+from typing import cast
 
 from aurum_worker.local_mt5_profile import ProfileStore, reject_binding_environment
 from aurum_worker.models.mt5 import (
@@ -66,7 +68,9 @@ class LocalSetupDialogs:
 
         def accept() -> None:
             nonlocal selected
-            indexes = choices.curselection()
+            # Tk returns integer indexes; its curselection stub lacks annotations.
+            selection = cast(Callable[[], tuple[int, ...]], choices.curselection)
+            indexes = selection()
             if indexes:
                 selected = candidates[indexes[0]].broker_symbol
                 window.destroy()

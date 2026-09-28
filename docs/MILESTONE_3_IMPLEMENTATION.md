@@ -1,8 +1,8 @@
 # Milestone 3 implementation
 
-Status (2026-09-22): **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE BLOCKED**.
+Status (updated 2026-09-28): **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE PENDING**.
 
-The user authorized real system development and then an end-to-end continuation. The production code now connects the Worker, strategy/risk/eligibility, immutable Shadow journal and authenticated dashboard. This is not an operational milestone-completion claim: genuine external evidence, hosted provisioning and the native transaction-time contract remain unresolved.
+The user authorized real system development and then an end-to-end continuation. The production code connects the Worker, strategy/risk/eligibility, immutable Shadow journal and authenticated dashboard. The 2026-09-28 [operator-accepted bounded transaction policy](MT5_TRANSACTION_TIME_POLICY.md) adds the requested Pepperstone normalization without further native timestamp proof. The subsequently authorized native read-only smoke passed with exit `0`, including full reconciliation and shutdown. This is not an operational milestone-completion claim: genuine external evidence, hosted provisioning and complete real-source Shadow end-to-end acceptance remain separate pending work.
 
 ## Integrated path
 
@@ -59,7 +59,7 @@ Do not paste credentials into chat or put real values in Git. `.env.example` con
 
 Web configuration requires the existing public Supabase URL/publishable key and explicit `AURUM_WEB_ORIGIN`. Production URLs must be HTTPS. With no configuration, `pnpm dev` renders an honest disconnected screen. A provisioned Auth user and matching owner/account records are external setup, not fictional seed credentials.
 
-The Worker composition accepts an already-issued least-privilege Worker token, public key, service URL, explicit owner/account UUIDs and outside-checkout `AURUM_SHADOW_REPLAY_PATH` from the operator's process environment. It neither issues credentials nor discovers secret files. The usual independently confirmed local terminal/account/specification configuration is required. The CLI uses the existing default time policy and cannot clear the unresolved alternate-policy transaction gate.
+The Worker composition accepts an already-issued least-privilege Worker token, public key, service URL, explicit owner/account UUIDs and outside-checkout `AURUM_SHADOW_REPLAY_PATH` from the operator's process environment. It neither issues credentials nor discovers secret files. The usual independently confirmed local terminal/account/specification configuration is required. The default time policy remains UTC. Explicit `AURUM_MT5_TRANSACTION_TIME_POLICY=pepperstone_demo_transactions_2026_summer_v1` selects the accepted bounded market/transaction pair; it does not alter a saved profile, issue credentials or clear unrelated safety/risk gates. Nonempty Position/Order observations must carry the matching transaction-policy version.
 
 An operator may explicitly invoke a bounded read-only run:
 
@@ -71,13 +71,13 @@ This command was not run against the user's terminal or real credentials during 
 
 Remaining prerequisites:
 
-- Authoritative native transaction event/query semantics and a complete opted-in read-only smoke pass.
+- The opted-in native read-only smoke prerequisite passed on 2026-09-28; retain the supported policy boundaries and do not equate that smoke with complete hosted Shadow operation.
 - Complete account-wide equity/ledger coverage, valid UTC day/week and drawdown baselines, and retained source evidence for replay.
 - Genuine calendar coverage, account-specific commission/swap terms, conservative slippage assumptions and independently verified clock/safety evidence.
 - Provisioned authenticated persistence/Auth environment and confirmed bindings; no remote credentials or deployment were created.
 - Real-source end-to-end validation, clean-checkout CI and separately authorized publication/review.
 
-Milestone 2 remains **COMPLETE WITH DOCUMENTED LIMITATIONS**. Its original release smoke is **NOT RUN**; the later native attempt is **BLOCKED**, not passed. Milestone 4/5, approval consumption, broker writes, Position mutation and Live Trading remain unauthorized. No commit, push, merge or deployment is automatic.
+Milestone 2 remains **COMPLETE WITH DOCUMENTED LIMITATIONS**. Its original release smoke was **NOT RUN**, and the earlier native attempt was **BLOCKED**. The separately authorized 2026-09-28 smoke is **PASSED**; those historical records are not overwritten. Milestone 4/5, approval consumption, broker writes, Position mutation and Live Trading remain unauthorized. The user explicitly authorized this follow-up's commit/push; merge and deployment are not authorized.
 
 ## Verification record
 

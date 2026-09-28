@@ -1,21 +1,51 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from mt5_factories import account, fake_adapter, specification
+from mt5_factories import NOW, account, candle_series, fake_adapter, specification
 
 from aurum_worker import mt5_cli
+from aurum_worker import reconciliation as reconciliation_module
 from aurum_worker.adapters.fake_mt5 import FakeMt5ReadAdapter
 from aurum_worker.models.mt5 import (
     AccountTradeMode,
+    CandleGap,
+    CandleRequest,
+    CandleSeries,
     HealthState,
     Mt5ReasonCode,
     Mt5WorkerConfig,
     ReconciliationOutcome,
     TickFreshness,
+    Timeframe,
 )
+
+
+@pytest.fixture(autouse=True)
+def smoke_clock(monkeypatch: pytest.MonkeyPatch) -> list[datetime]:
+    current = [NOW]
+    monkeypatch.setattr(
+        mt5_cli, "datetime", SimpleNamespace(now=lambda timezone: current[0])
+    )
+    monkeypatch.setattr(
+        reconciliation_module,
+        "datetime",
+        SimpleNamespace(now=lambda timezone: current[0]),
+    )
+    return current
+
+
+def current_smoke_series() -> CandleSeries:
+    sample = candle_series().candles[0]
+    return CandleSeries(
+        candles=tuple(
+            sample.model_copy(update={"open_at": NOW - timedelta(minutes=5 - index)})
+            for index in range(5)
+        )
+    )
 
 
 class ReconciliationStub:
@@ -61,6 +91,7 @@ def install_smoke_doubles(
     adapter: FakeMt5ReadAdapter,
     reconciliation: ReconciliationStub | None = None,
 ) -> None:
+    adapter.candles[("XAUUSD", Timeframe.M1)] = current_smoke_series()
     monkeypatch.setattr(mt5_cli, "MetaTrader5ReadAdapter", lambda config: adapter)
     stub = reconciliation or ReconciliationStub()
     monkeypatch.setattr(
@@ -264,13 +295,17 @@ def test_opted_in_smoke_reconciliation_mismatch_is_blocked(
     assert adapter.call_log[-1] == "disconnect"
 
 
+@pytest.mark.parametrize("elapsed_microseconds", [0, 1, 59_999_999])
 def test_healthy_opted_in_smoke_passes_only_after_shutdown(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    smoke_clock: list[datetime],
+    elapsed_microseconds: int,
 ) -> None:
     adapter = fake_adapter()
     install_smoke_doubles(monkeypatch, adapter)
+    smoke_clock[0] = NOW + timedelta(microseconds=elapsed_microseconds)
 
     result = mt5_cli._smoke(smoke_config(tmp_path / "terminal64.exe"))
 
@@ -291,12 +326,178 @@ def test_healthy_opted_in_smoke_passes_only_after_shutdown(
     }.issubset(adapter.call_log)
 
 
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "empty",
+        "short_one",
+        "short_two",
+        "short_three",
+        "short_four",
+        "gap_metadata",
+        "hidden_gap",
+        "incomplete",
+        "wrong_timeframe",
+        "wrong_symbol",
+        "unaligned",
+        "future",
+    ],
+)
+def test_smoke_rejects_invalid_five_bar_window_before_transaction_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    defect: str,
+) -> None:
+    adapter = fake_adapter()
+    install_smoke_doubles(monkeypatch, adapter)
+    series = current_smoke_series()
+    bars = list(series.candles)
+    gaps: tuple[CandleGap, ...] = ()
+    if defect == "empty":
+        bars = []
+    elif defect.startswith("short_"):
+        count = {"short_one": 1, "short_two": 2, "short_three": 3, "short_four": 4}[
+            defect
+        ]
+        bars = bars[-count:]
+    elif defect == "gap_metadata":
+        gaps = (
+            CandleGap(
+                after_open_at=bars[0].open_at,
+                before_open_at=bars[2].open_at,
+                missing_intervals=1,
+            ),
+        )
+    elif defect == "hidden_gap":
+        bars[0] = bars[0].model_copy(
+            update={"open_at": bars[0].open_at - timedelta(minutes=1)}
+        )
+    elif defect == "incomplete":
+        bars[0] = bars[0].model_copy(update={"is_complete": False})
+    elif defect == "wrong_timeframe":
+        bars[0] = bars[0].model_copy(update={"timeframe": Timeframe.M5})
+    elif defect == "wrong_symbol":
+        bars[0] = bars[0].model_copy(update={"symbol": "EURUSD"})
+    else:
+        shift = timedelta(seconds=1) if defect == "unaligned" else timedelta(minutes=1)
+        bars = [bar.model_copy(update={"open_at": bar.open_at + shift}) for bar in bars]
+    adapter.candles[("XAUUSD", Timeframe.M1)] = CandleSeries(
+        candles=tuple(bars), gaps=gaps
+    )
+
+    result = mt5_cli._smoke(smoke_config(tmp_path / "terminal64.exe"))
+
+    assert result == 3
+    assert capsys.readouterr().out.strip() == "FAILED — CANDLE_DATA_INVALID"
+    assert "get_open_positions" not in adapter.call_log
+    assert "get_order_history" not in adapter.call_log
+    assert adapter.call_log[-1] == "disconnect"
+
+
+def test_smoke_rejects_more_candles_than_requested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    adapter = fake_adapter()
+    install_smoke_doubles(monkeypatch, adapter)
+    series = current_smoke_series()
+    oversized = CandleSeries(
+        candles=(
+            series.candles[0].model_copy(
+                update={"open_at": NOW - timedelta(minutes=6)}
+            ),
+            *series.candles,
+        )
+    )
+    original_get_candles = adapter.get_candles
+
+    def too_many_candles(
+        broker_symbol: str,
+        timeframe: Timeframe,
+        request: CandleRequest,
+        *,
+        trace_id: str,
+    ) -> CandleSeries:
+        assert request.count == 5
+        original_get_candles(broker_symbol, timeframe, request, trace_id=trace_id)
+        return oversized
+
+    monkeypatch.setattr(adapter, "get_candles", too_many_candles)
+
+    assert mt5_cli._smoke(smoke_config(tmp_path / "terminal64.exe")) == 3
+    assert capsys.readouterr().out.strip() == "FAILED — CANDLE_DATA_INVALID"
+    assert "get_open_positions" not in adapter.call_log
+    assert adapter.call_log[-1] == "disconnect"
+
+
+@pytest.mark.parametrize("age_minutes", [1, 60, 24 * 60])
+def test_smoke_rejects_stale_complete_five_bar_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    age_minutes: int,
+) -> None:
+    adapter = fake_adapter()
+    install_smoke_doubles(monkeypatch, adapter)
+    adapter.candles[("XAUUSD", Timeframe.M1)] = CandleSeries(
+        candles=tuple(
+            bar.model_copy(
+                update={"open_at": bar.open_at - timedelta(minutes=age_minutes)}
+            )
+            for bar in current_smoke_series().candles
+        )
+    )
+
+    result = mt5_cli._smoke(smoke_config(tmp_path / "terminal64.exe"))
+
+    assert result == 2
+    assert capsys.readouterr().out.strip() == "BLOCKED — CANDLE_DATA_STALE"
+    assert "get_open_positions" not in adapter.call_log
+    assert adapter.call_log[-1] == "disconnect"
+
+
+def test_smoke_rechecks_clock_after_candle_read_crosses_minute_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    smoke_clock: list[datetime],
+) -> None:
+    adapter = fake_adapter()
+    install_smoke_doubles(monkeypatch, adapter)
+    smoke_clock[0] = NOW + timedelta(seconds=59)
+    original_get_candles = adapter.get_candles
+
+    def slow_candles(
+        broker_symbol: str,
+        timeframe: Timeframe,
+        request: CandleRequest,
+        *,
+        trace_id: str,
+    ) -> CandleSeries:
+        smoke_clock[0] = NOW + timedelta(minutes=1)
+        return original_get_candles(
+            broker_symbol, timeframe, request, trace_id=trace_id
+        )
+
+    monkeypatch.setattr(adapter, "get_candles", slow_candles)
+
+    result = mt5_cli._smoke(smoke_config(tmp_path / "terminal64.exe"))
+
+    assert result == 2
+    assert capsys.readouterr().out.strip() == "BLOCKED — CANDLE_DATA_STALE"
+    assert "get_open_positions" not in adapter.call_log
+    assert adapter.call_log[-1] == "disconnect"
+
+
 def test_real_reconciler_accepts_only_explicit_smoke_confirmation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     adapter = fake_adapter()
+    adapter.candles[("XAUUSD", Timeframe.M1)] = current_smoke_series()
     monkeypatch.setattr(mt5_cli, "MetaTrader5ReadAdapter", lambda config: adapter)
 
     result = mt5_cli._smoke(
@@ -321,6 +522,7 @@ def test_real_reconciler_blocks_when_smoke_confirmation_is_absent(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     adapter = fake_adapter()
+    adapter.candles[("XAUUSD", Timeframe.M1)] = current_smoke_series()
     monkeypatch.setattr(mt5_cli, "MetaTrader5ReadAdapter", lambda config: adapter)
 
     result = mt5_cli._smoke(

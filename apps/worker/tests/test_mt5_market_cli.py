@@ -8,6 +8,7 @@ from typing import NoReturn
 import pytest
 from mt5_factories import NOW, candle_series, tick
 
+from aurum_worker import mt5_cli
 from aurum_worker import mt5_market_cli as cli
 from aurum_worker.local_mt5_profile import LocalMt5Profile, ProfileError
 from aurum_worker.models.mt5 import (
@@ -28,6 +29,7 @@ from aurum_worker.mt5_transaction_inventory import (
     RowInventory,
     TransactionInventory,
 )
+from aurum_worker.mt5_transaction_time import PEPPERSTONE_TRANSACTION_POLICY
 
 CONFIRM = "--confirm-pepperstone-demo"
 ENVIRONMENT_FIELDS = (
@@ -143,7 +145,7 @@ def isolate_all_native_and_profile_access(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(cli, "ProfileStore", no_profile)
     monkeypatch.setattr(cli, "MetaTrader5ReadAdapter", no_native)
-    monkeypatch.setattr(cli.mt5_cli, "_smoke", no_smoke)
+    monkeypatch.setattr(mt5_cli, "_smoke", no_smoke)
 
 
 @pytest.fixture
@@ -403,13 +405,16 @@ def test_process_policy_selection_never_mutates_saved_profile(
 
     if action == "smoke":
         monkeypatch.setenv("AURUM_MT5_READONLY_SMOKE", "1")
-        monkeypatch.setattr(cli.mt5_cli, "_smoke", delegate)
+        monkeypatch.setattr(mt5_cli, "_smoke", delegate)
     else:
         monkeypatch.setattr(cli, "_market_check", delegate)
     assert cli.main([action, CONFIRM]) == 2
     assert memory_store.loads == 1
     assert len(captured) == 1
     assert captured[0].market_time_policy == PEPPERSTONE_POLICY
+    assert captured[0].transaction_time_policy == (
+        PEPPERSTONE_TRANSACTION_POLICY if action == "smoke" else None
+    )
     assert captured[0].readonly_smoke is (action == "smoke")
     assert captured[0].max_tick_age_seconds == 10
     assert captured[0].max_clock_drift_seconds == 30
@@ -423,6 +428,7 @@ def test_process_policy_selection_never_mutates_saved_profile(
     )
     assert memory_store.profile.model_dump_json() == before
     assert memory_store.profile.worker_config().market_time_policy == UTC_POLICY
+    assert memory_store.profile.worker_config().transaction_time_policy is None
     assert not memory_store.profile.worker_config().readonly_smoke
 
 

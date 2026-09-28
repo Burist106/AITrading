@@ -24,7 +24,10 @@ from aurum_worker.mt5_market_time import (
     UTC_POLICY,
     MarketTimePolicy,
 )
-from aurum_worker.reconciliation import ReadOnlyReconciliationService
+from aurum_worker.reconciliation import (
+    ReadOnlyReconciliationService,
+    ReconciliationResult,
+)
 from aurum_worker.shadow.market import (
     MarketBlockCode,
     MarketBlocked,
@@ -212,8 +215,16 @@ def test_candles_fail_closed(mutation: str) -> None:
     assert isinstance(result, MarketBlocked)
 
 
-@pytest.mark.parametrize("age", [Decimal("5.001"), Decimal("-0.001")])
-def test_freshness_is_recomputed_not_trusted_from_label(age: Decimal) -> None:
+@pytest.mark.parametrize(
+    ("age", "expected_reason"),
+    [
+        (Decimal("5.001"), MarketBlockCode.RECONCILIATION_REQUIRED),
+        (Decimal("-0.001"), MarketBlockCode.TICK_NOT_CURRENT),
+    ],
+)
+def test_freshness_is_recomputed_not_trusted_from_label(
+    age: Decimal, expected_reason: MarketBlockCode
+) -> None:
     adapter = read_port()
     adapter.ticks["XAUUSD"] = adapter.ticks["XAUUSD"].model_copy(
         update={
@@ -223,7 +234,9 @@ def test_freshness_is_recomputed_not_trusted_from_label(age: Decimal) -> None:
     )
     result = service(adapter).capture(trace_id="bad-tick")
     assert isinstance(result, MarketBlocked)
-    assert result.reason is MarketBlockCode.TICK_NOT_CURRENT
+    # Full reconciliation now independently ages positive stale/delayed ticks;
+    # the stricter Shadow future-tick boundary remains separately enforced.
+    assert result.reason is expected_reason
 
 
 def test_changed_data_changes_content_references() -> None:
@@ -301,14 +314,15 @@ def test_utc_bucket_alignment_is_not_local_wall_clock_alignment() -> None:
 @pytest.mark.parametrize(
     "change", ["command", "account", "server", "position", "order"]
 )
-def test_database_change_after_full_reconciliation_blocks(change: str) -> None:
+def test_database_change_after_full_reconciliation_blocks(
+    change: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class ChangedStore(InMemoryMt5ObservationPersistence):
-        reads: int = 0
+        reconciliation_returned: bool = False
 
         def load_reconciliation_state(self) -> DatabaseReconciliationState:
-            self.reads += 1
             state = super().load_reconciliation_state()
-            if self.reads == 1:
+            if not self.reconciliation_returned:
                 return state
             variants: dict[str, dict[str, object]] = {
                 "command": {"executing_command_ids": frozenset({"uncertain"})},
@@ -326,6 +340,16 @@ def test_database_change_after_full_reconciliation_blocks(change: str) -> None:
             confirmed_symbol_binding=confirmed_binding(),
         )
     )
+    original = ReadOnlyReconciliationService.run
+
+    def completed(
+        reconciler: ReadOnlyReconciliationService, *, trace_id: str
+    ) -> ReconciliationResult:
+        result = original(reconciler, trace_id=trace_id)
+        store.reconciliation_returned = True
+        return result
+
+    monkeypatch.setattr(ReadOnlyReconciliationService, "run", completed)
     adapter = read_port()
     result = service(adapter, store).capture(trace_id="database-changed")
     assert isinstance(result, MarketBlocked)
@@ -380,4 +404,5 @@ def test_refreshing_observation_metadata_does_not_look_like_spec_change(
 def test_stricter_config_does_not_inherit_five_second_live_allowance() -> None:
     result = service(read_port(), max_tick_age_seconds=1).capture(trace_id="strict")
     assert isinstance(result, MarketBlocked)
-    assert result.reason is MarketBlockCode.TICK_NOT_CURRENT
+    # The same stricter limit is now applied before the Shadow capture, too.
+    assert result.reason is MarketBlockCode.RECONCILIATION_REQUIRED

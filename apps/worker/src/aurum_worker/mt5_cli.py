@@ -13,6 +13,7 @@ from aurum_worker.models.mt5 import (
     AccountTradeMode,
     AccountVerificationState,
     CandleRequest,
+    CandleSeries,
     ConfirmedSymbolBinding,
     DatabaseReconciliationState,
     HealthState,
@@ -28,6 +29,7 @@ from aurum_worker.models.mt5 import (
 )
 from aurum_worker.mt5_safety import (
     is_canonical_xauusd,
+    timeframe_duration_seconds,
     utc_from_epoch,
     utc_from_epoch_milliseconds,
     verify_account,
@@ -94,6 +96,46 @@ def _smoke_database_state(
             version=1,
         )
     )
+
+
+def _require_current_smoke_candles(
+    series: CandleSeries, broker_symbol: str, checked_at: datetime
+) -> None:
+    """Require the exact completed M1 window at the post-read check boundary."""
+    candles = series.candles
+    duration = timedelta(seconds=timeframe_duration_seconds(Timeframe.M1))
+    if (
+        len(candles) != 5
+        or series.gaps
+        or any(
+            not candle.is_complete
+            or candle.symbol != broker_symbol
+            or candle.timeframe is not Timeframe.M1
+            or candle.open_at.astimezone(UTC).second != 0
+            or candle.open_at.microsecond != 0
+            for candle in candles
+        )
+        or any(
+            following.open_at - current.open_at != duration
+            for current, following in zip(candles, candles[1:], strict=False)
+        )
+    ):
+        raise _failure(
+            Mt5ReasonCode.CANDLE_DATA_INVALID,
+            "Five completed consecutive M1 candles are required.",
+        )
+    latest_close = candles[-1].open_at + duration
+    expected_close = checked_at.astimezone(UTC).replace(second=0, microsecond=0)
+    if latest_close > expected_close:
+        raise _failure(
+            Mt5ReasonCode.CANDLE_DATA_INVALID,
+            "Completed candle verification includes a future close.",
+        )
+    if latest_close < expected_close:
+        raise _failure(
+            Mt5ReasonCode.CANDLE_DATA_STALE,
+            "Latest completed M1 candle is not current.",
+        )
 
 
 def _fingerprint(config: Mt5WorkerConfig) -> int:
@@ -178,13 +220,7 @@ def _smoke(config: Mt5WorkerConfig) -> int:
             CandleRequest(start_position=1, count=5),
             trace_id="local-readonly-smoke",
         )
-        if not candles.candles or any(
-            not candle.is_complete for candle in candles.candles
-        ):
-            raise _failure(
-                Mt5ReasonCode.CANDLE_DATA_INVALID,
-                "Completed candle verification failed.",
-            )
+        _require_current_smoke_candles(candles, config.broker_symbol, datetime.now(UTC))
         adapter.get_open_positions(trace_id="local-readonly-smoke")
         adapter.get_active_orders(trace_id="local-readonly-smoke")
         now = datetime.now(UTC)

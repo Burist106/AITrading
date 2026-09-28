@@ -217,8 +217,6 @@ def test_real_dpapi_restart_roundtrip_and_tamper(tmp_path: Path) -> None:
 def test_protection_has_no_non_windows_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from aurum_worker.adapters import windows_protection
-
-    monkeypatch.setattr(windows_protection.sys, "platform", "linux")
+    monkeypatch.setattr(sys, "platform", "linux")
     with pytest.raises(ProtectionError):
         WindowsDataProtection().protect(b"synthetic")

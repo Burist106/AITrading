@@ -21,7 +21,15 @@ from pydantic import (
     model_validator,
 )
 
-from aurum_worker.mt5_market_time import UTC_POLICY, MarketTimePolicy
+from aurum_worker.mt5_market_time import (
+    PEPPERSTONE_POLICY,
+    UTC_POLICY,
+    MarketTimePolicy,
+)
+from aurum_worker.mt5_transaction_time import (
+    PEPPERSTONE_TRANSACTION_POLICY,
+    TransactionTimePolicy,
+)
 
 DecimalValue = Annotated[Decimal, Field(allow_inf_nan=False)]
 PositiveDecimal = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]
@@ -244,6 +252,7 @@ class HistoryQueryResultState(StrEnum):
 
 class Mt5WorkerConfig(Mt5Model):
     market_time_policy: MarketTimePolicy = UTC_POLICY
+    transaction_time_policy: TransactionTimePolicy | None = None
     terminal_path: Path | None = None
     broker_symbol: str | None = None
     expected_account_fingerprint: str | None = None
@@ -269,6 +278,13 @@ class Mt5WorkerConfig(Mt5Model):
 
     @model_validator(mode="after")
     def validate_market_time_policy(self) -> Self:
+        if (
+            self.transaction_time_policy is not None
+            and self.market_time_policy == UTC_POLICY
+        ):
+            raise ValueError(
+                "Transaction time policy requires the bound market policy."
+            )
         if self.market_time_policy != UTC_POLICY and (
             not self.broker_symbol
             or not self.expected_account_fingerprint
@@ -294,7 +310,17 @@ class Mt5WorkerConfig(Mt5Model):
     def from_environ(cls, environ: dict[str, str] | None = None) -> Self:
         values = os.environ if environ is None else environ
         terminal = values.get("AURUM_MT5_TERMINAL_PATH") or None
+        requested_policy = values.get("AURUM_MT5_TRANSACTION_TIME_POLICY")
+        transaction_policy: TransactionTimePolicy | None = None
+        if requested_policy == PEPPERSTONE_TRANSACTION_POLICY:
+            transaction_policy = PEPPERSTONE_TRANSACTION_POLICY
+        elif requested_policy not in (None, ""):
+            raise ValueError("Unsupported transaction time policy selection.")
         return cls(
+            market_time_policy=(
+                PEPPERSTONE_POLICY if transaction_policy is not None else UTC_POLICY
+            ),
+            transaction_time_policy=transaction_policy,
             terminal_path=Path(terminal) if terminal else None,
             broker_symbol=values.get("AURUM_MT5_BROKER_SYMBOL") or None,
             expected_account_fingerprint=values.get(
