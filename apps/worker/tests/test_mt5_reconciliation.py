@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from itertools import count
 from threading import Event
@@ -13,24 +13,31 @@ from mt5_factories import (
     account,
     active_order,
     confirmed_binding,
+    deal,
     fake_adapter,
+    historical_order,
     position,
     specification,
     terminal,
     tick,
 )
 
+from aurum_worker.adapters.fake_mt5 import FakeMt5ReadAdapter
 from aurum_worker.adapters.persistence_mt5 import (
     InMemoryMt5ObservationPersistence,
     WorkerRpcMt5ObservationPersistence,
 )
+from aurum_worker.adapters.protocols import Mt5ReadPort
 from aurum_worker.models.mt5 import (
     AccountTradeMode,
     ComponentHeartbeat,
     ComponentHeartbeatState,
     DatabaseReconciliationState,
     HealthState,
+    HistoricalDealObservation,
+    HistoricalOrderObservation,
     HistoryQueryResultState,
+    HistoryRequest,
     Mt5ComponentCode,
     Mt5ReadFailure,
     Mt5ReasonCode,
@@ -147,10 +154,10 @@ class DownHeartbeatTransportClient:
 
 def service(
     *,
-    adapter=None,
+    adapter: Mt5ReadPort | None = None,
     persistence: InMemoryMt5ObservationPersistence | None = None,
     worker_config: Mt5WorkerConfig | None = None,
-    identifier_factory=None,
+    identifier_factory: Callable[[], str] | None = None,
 ) -> tuple[ReadOnlyReconciliationService, InMemoryMt5ObservationPersistence]:
     store = persistence
     if store is None:
@@ -168,12 +175,12 @@ def service(
 
 
 def poller(
-    adapter,
+    adapter: Mt5ReadPort,
     store: InMemoryMt5ObservationPersistence,
     reconciler: ReadOnlyReconciliationService,
     *,
-    clock=None,
-    monotonic_clock=None,
+    clock: Callable[[], datetime] | None = None,
+    monotonic_clock: Callable[[], float] | None = None,
     worker_config: Mt5WorkerConfig | None = None,
 ) -> ReadOnlyPollingService:
     return ReadOnlyPollingService(
@@ -442,11 +449,143 @@ def test_current_report_persists_exact_history_boundaries_and_counts() -> None:
     assert orders.requested_start_at == deals.requested_start_at
     assert orders.query_completed_at == deals.query_completed_at == NOW
     assert orders.returned_count == deals.returned_count == 1
-    assert orders.earliest_returned_at == orders.latest_returned_at
+    assert (
+        orders.earliest_returned_at
+        == orders.latest_returned_at
+        == historical_order().completed_at
+    )
     assert deals.earliest_returned_at == deals.latest_returned_at
     persisted = store.reports[result.report.reconciliation_id]
     assert persisted.order_history_evidence == orders
     assert persisted.deal_history_evidence == deals
+
+
+@pytest.mark.parametrize(
+    ("setup_at", "completed_at", "expected_count"),
+    [
+        (NOW - timedelta(days=8), NOW - timedelta(hours=1), 1),
+        (NOW - timedelta(days=8), NOW, 1),
+        (NOW - timedelta(days=8), NOW - timedelta(minutes=30), 1),
+        (
+            NOW - timedelta(days=8),
+            NOW - timedelta(hours=1, microseconds=1),
+            0,
+        ),
+        (NOW - timedelta(minutes=30), NOW + timedelta(microseconds=1), 0),
+    ],
+)
+def test_fake_order_history_selects_completion_with_inclusive_bounds(
+    setup_at: datetime, completed_at: datetime, expected_count: int
+) -> None:
+    adapter = fake_adapter()
+    adapter.order_history = (
+        historical_order().model_copy(
+            update={"setup_at": setup_at, "completed_at": completed_at}
+        ),
+    )
+    adapter.connect(trace_id="trace-order-selection")
+
+    rows = adapter.get_order_history(
+        HistoryRequest(start_at=NOW - timedelta(hours=1), end_at=NOW),
+        trace_id="trace-order-selection",
+    )
+
+    assert len(rows) == expected_count
+
+
+def test_fake_order_history_rejects_missing_completion() -> None:
+    adapter = fake_adapter()
+    adapter.order_history = (
+        historical_order().model_copy(update={"completed_at": None}),
+    )
+    adapter.connect(trace_id="trace-order-missing-completion")
+
+    with pytest.raises(Mt5ReadFailure) as raised:
+        adapter.get_order_history(
+            HistoryRequest(start_at=NOW - timedelta(hours=1), end_at=NOW),
+            trace_id="trace-order-missing-completion",
+        )
+
+    assert raised.value.error.reason_code is Mt5ReasonCode.HISTORY_QUERY_FAILED
+
+
+@pytest.mark.parametrize("history_kind", ["orders", "deals"])
+@pytest.mark.parametrize(
+    "outside_at", [NOW - timedelta(days=8), NOW + timedelta(microseconds=1)]
+)
+def test_outside_history_events_block_and_preserve_returned_evidence(
+    monkeypatch: pytest.MonkeyPatch, history_kind: str, outside_at: datetime
+) -> None:
+    adapter = fake_adapter()
+
+    def returned_orders(
+        self: FakeMt5ReadAdapter, request: HistoryRequest, *, trace_id: str
+    ) -> list[HistoricalOrderObservation]:
+        return [
+            historical_order(),
+            historical_order("3002").model_copy(update={"completed_at": outside_at}),
+        ]
+
+    def returned_deals(
+        self: FakeMt5ReadAdapter, request: HistoryRequest, *, trace_id: str
+    ) -> list[HistoricalDealObservation]:
+        return [
+            deal(),
+            deal("4002").model_copy(update={"occurred_at": outside_at}),
+        ]
+
+    if history_kind == "orders":
+        monkeypatch.setattr(FakeMt5ReadAdapter, "get_order_history", returned_orders)
+    else:
+        monkeypatch.setattr(FakeMt5ReadAdapter, "get_deal_history", returned_deals)
+    reconciler, store = service(adapter=adapter)
+
+    result = reconciler.run(trace_id="trace-outside-history-window")
+
+    evidence = (
+        result.report.order_history_evidence
+        if history_kind == "orders"
+        else result.report.deal_history_evidence
+    )
+    known_at = NOW - timedelta(minutes=59)
+    assert evidence.result_state is HistoryQueryResultState.WINDOW_INCOMPLETE
+    assert evidence.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert evidence.returned_count == 2
+    assert evidence.earliest_returned_at == min(known_at, outside_at)
+    assert evidence.latest_returned_at == max(known_at, outside_at)
+    assert evidence.query_completed_at == NOW
+    assert result.health.state is HealthState.BLOCKED
+    assert result.health.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert store.reports[result.report.reconciliation_id] == result.report
+
+
+@pytest.mark.parametrize("include_known_order", [False, True])
+def test_missing_order_completion_blocks_without_inventing_bounds(
+    monkeypatch: pytest.MonkeyPatch, include_known_order: bool
+) -> None:
+    def returned_orders(
+        self: FakeMt5ReadAdapter, request: HistoryRequest, *, trace_id: str
+    ) -> list[HistoricalOrderObservation]:
+        rows = [historical_order().model_copy(update={"completed_at": None})]
+        if include_known_order:
+            rows.append(historical_order("3002"))
+        return rows
+
+    monkeypatch.setattr(FakeMt5ReadAdapter, "get_order_history", returned_orders)
+    reconciler, store = service()
+
+    result = reconciler.run(trace_id="trace-missing-order-completion")
+
+    evidence = result.report.order_history_evidence
+    known_at = historical_order().completed_at if include_known_order else None
+    assert evidence.result_state is HistoryQueryResultState.WINDOW_INCOMPLETE
+    assert evidence.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert evidence.returned_count == 1 + int(include_known_order)
+    assert evidence.earliest_returned_at == evidence.latest_returned_at == known_at
+    assert evidence.query_completed_at == NOW
+    assert result.health.state is HealthState.BLOCKED
+    assert result.health.reason_code is Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+    assert store.reports[result.report.reconciliation_id] == result.report
 
 
 def test_stale_tick_blocks_and_symbol_state_changes_are_observed() -> None:
@@ -474,7 +613,8 @@ def test_stale_tick_blocks_and_symbol_state_changes_are_observed() -> None:
     assert raised.value.error.reason_code is Mt5ReasonCode.SYMBOL_NOT_VISIBLE
     assert "Market Watch" in raised.value.error.safe_detail
     assert len(store.symbols) == 2
-    assert store.symbols[-1].usability_state is SymbolUsabilityState.NOT_VISIBLE
+    unusable_symbol = store.symbols[-1]
+    assert unusable_symbol.usability_state is SymbolUsabilityState.NOT_VISIBLE
 
     with pytest.raises(Mt5ReadFailure):
         reconciler.run(trace_id="trace-unusable-symbol-repeated")
@@ -485,7 +625,8 @@ def test_stale_tick_blocks_and_symbol_state_changes_are_observed() -> None:
         HealthState.HEALTHY
     )
     assert len(store.symbols) == 3
-    assert store.symbols[-1].usability_state is SymbolUsabilityState.USABLE
+    restored_symbol = store.symbols[-1]
+    assert restored_symbol.usability_state is SymbolUsabilityState.USABLE
 
 
 def test_reconciliation_report_replay_is_idempotent() -> None:
@@ -521,6 +662,12 @@ def test_short_tick_poll_has_no_history_or_reconciliation_run() -> None:
         "get_terminal_info",
         "get_account_info",
         "get_latest_tick",
+        "get_terminal_info",
+        "get_account_info",
+        "get_terminal_info",
+        "get_account_info",
+        "get_terminal_info",
+        "get_account_info",
     ]
     assert len(store.reports) == report_count
     assert len(store.ticks) == 1
@@ -572,16 +719,19 @@ def test_light_tick_recovery_requests_full_without_restoring_healthy() -> None:
 
     blocked = polling.run_once()
     assert blocked.health.state is HealthState.BLOCKED
-    assert polling.state.reconciliation_required is False
+    blocked_state = polling.state
+    assert blocked_state.reconciliation_required is False
 
     adapter.replace_tick("XAUUSD", tick(TickFreshness.LIVE))
     assert polling.run_tick_once() is True
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reconciliation_required is True
+    recovered_tick_state = polling.state
+    assert recovered_tick_state.health_state is HealthState.BLOCKED
+    assert recovered_tick_state.reconciliation_required is True
 
     restored = polling.run_once()
     assert restored.health.state is HealthState.HEALTHY
-    assert polling.state.health_state is HealthState.HEALTHY
+    restored_state = polling.state
+    assert restored_state.health_state is HealthState.HEALTHY
     polling.stop()
 
 
@@ -656,13 +806,15 @@ def test_short_tick_account_policy_clears_prior_healthy_immediately(
     reconciler, _ = service(adapter=adapter, persistence=store)
     polling = poller(adapter, store, reconciler)
     polling.run_once()
-    assert polling.state.health_state is HealthState.HEALTHY
+    initial_state = polling.state
+    assert initial_state.health_state is HealthState.HEALTHY
     adapter.accounts = (account(mode),)
 
     assert polling.run_tick_once() is False
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reason_code is reason
-    assert polling.state.reconciliation_required is True
+    failed_state = polling.state
+    assert failed_state.health_state is HealthState.BLOCKED
+    assert failed_state.reason_code is reason
+    assert failed_state.reconciliation_required is True
     assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
         ComponentHeartbeatState.FAILED
     )
@@ -683,7 +835,8 @@ def test_short_tick_identity_or_broker_gap_clears_prior_healthy_immediately(
     reconciler, _ = service(adapter=adapter, persistence=store)
     polling = poller(adapter, store, reconciler)
     polling.run_once()
-    assert polling.state.health_state is HealthState.HEALTHY
+    initial_state = polling.state
+    assert initial_state.health_state is HealthState.HEALTHY
     if missing_broker:
         polling._broker_symbol = None
     else:
@@ -694,9 +847,10 @@ def test_short_tick_identity_or_broker_gap_clears_prior_healthy_immediately(
         )
 
     assert polling.run_tick_once() is False
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
-    assert polling.state.reconciliation_required is True
+    failed_state = polling.state
+    assert failed_state.health_state is HealthState.BLOCKED
+    assert failed_state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+    assert failed_state.reconciliation_required is True
     polling.stop()
 
 
@@ -710,15 +864,24 @@ def test_position_poll_is_separate_and_changed_set_requires_full() -> None:
     adapter.call_log.clear()
 
     assert polling.run_position_once() is True
-    assert adapter.call_log == ["get_open_positions", "get_active_orders"]
+    assert adapter.call_log == [
+        "get_terminal_info",
+        "get_account_info",
+        "get_open_positions",
+        "get_active_orders",
+        "get_terminal_info",
+        "get_account_info",
+    ]
     assert len(store.reports) == report_count
-    assert polling.state.reconciliation_required is False
+    unchanged_state = polling.state
+    assert unchanged_state.reconciliation_required is False
 
     adapter.positions = (position(),)
     assert polling.run_position_once() is False
-    assert polling.state.reconciliation_required is True
-    assert polling.state.health_state is HealthState.BLOCKED
-    assert polling.state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
+    changed_state = polling.state
+    assert changed_state.reconciliation_required is True
+    assert changed_state.health_state is HealthState.BLOCKED
+    assert changed_state.reason_code is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
     assert len(store.reports) == report_count
     polling.stop()
 
@@ -754,15 +917,17 @@ def test_reconnect_requires_full_reconciliation_before_healthy_returns() -> None
     reconciler, _ = service(adapter=adapter, persistence=store)
     polling = poller(adapter, store, reconciler)
     polling.run_once()
-    assert polling.state.health_state is HealthState.HEALTHY
+    initial_state = polling.state
+    assert initial_state.health_state is HealthState.HEALTHY
 
     adapter.failures["get_terminal_info"] = Mt5ReasonCode.TERMINAL_INFO_UNAVAILABLE
     with pytest.raises(Mt5ReadFailure) as raised:
         polling.run_tick_once()
     polling._handle_failure(raised.value, "reconnect-failure")
-    assert polling.state.connected is False
-    assert polling.state.reconciliation_required is True
-    assert polling.state.health_state is HealthState.UNAVAILABLE
+    failed_state = polling.state
+    assert failed_state.connected is False
+    assert failed_state.reconciliation_required is True
+    assert failed_state.health_state is HealthState.UNAVAILABLE
     assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
         ComponentHeartbeatState.FAILED
     )
@@ -781,8 +946,9 @@ def test_reconnect_requires_full_reconciliation_before_healthy_returns() -> None
 
     adapter.failures.clear()
     assert polling.run_due_once() == "full"
-    assert polling.state.reconciliation_required is False
-    assert polling.state.health_state is HealthState.HEALTHY
+    restored_state = polling.state
+    assert restored_state.reconciliation_required is False
+    assert restored_state.health_state is HealthState.HEALTHY
     polling.stop()
 
 
@@ -1000,13 +1166,15 @@ def test_started_poller_can_publish_worker_healthy_only_while_running() -> None:
         ]
         assert healthy_publications
         assert all(healthy_publications)
-        assert polling.state.running is True
+        started_state = polling.state
+        assert started_state.running is True
         market_before_stop = store.heartbeats[Mt5ComponentCode.MARKET_DATA]
     finally:
         polling.stop(timeout_seconds=2)
 
     stopped_publication_count = len(store.worker_publications)
-    assert polling.state.running is False
+    stopped_state = polling.state
+    assert stopped_state.running is False
     stopped_worker, running_when_stopped = store.worker_publications[-1]
     assert running_when_stopped is False
     assert stopped_worker.state is ComponentHeartbeatState.FAILED
@@ -1250,26 +1418,24 @@ def test_reconciliation_required_caps_worker_until_a_new_full_cycle() -> None:
             and monotonic() < deadline
         ):
             Event().wait(0.025)
-        assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
-            ComponentHeartbeatState.HEALTHY
-        )
+        initial_worker = store.heartbeats[Mt5ComponentCode.WORKER]
+        assert initial_worker.state is ComponentHeartbeatState.HEALTHY
 
         polling.request_full_reconciliation()
         assert polling.run_tick_once() is True
-        assert polling.state.reconciliation_required is True
-        assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
-            ComponentHeartbeatState.FAILED
-        )
-        assert store.heartbeats[Mt5ComponentCode.WORKER].detail is (
-            Mt5ReasonCode.RECONCILIATION_INCOMPLETE
-        )
+        tick_state = polling.state
+        assert tick_state.reconciliation_required is True
+        requested_worker = store.heartbeats[Mt5ComponentCode.WORKER]
+        assert requested_worker.state is ComponentHeartbeatState.FAILED
+        assert requested_worker.detail is Mt5ReasonCode.RECONCILIATION_INCOMPLETE
         assert store.heartbeats[Mt5ComponentCode.MARKET_DATA].state is (
             ComponentHeartbeatState.HEALTHY
         )
 
         heartbeat_count = len(store.heartbeat_history)
         assert polling.run_position_once() is True
-        assert polling.state.reconciliation_required is True
+        position_state = polling.state
+        assert position_state.reconciliation_required is True
         assert len(store.heartbeat_history) == heartbeat_count + 2
         assert store.heartbeat_history[-2].component_code is (
             Mt5ComponentCode.MT5_ADAPTER
@@ -1277,10 +1443,10 @@ def test_reconciliation_required_caps_worker_until_a_new_full_cycle() -> None:
         assert store.heartbeat_history[-1].component_code is Mt5ComponentCode.WORKER
 
         assert polling.run_once().health.state is HealthState.HEALTHY
-        assert polling.state.reconciliation_required is False
-        assert store.heartbeats[Mt5ComponentCode.WORKER].state is (
-            ComponentHeartbeatState.HEALTHY
-        )
+        restored_state = polling.state
+        assert restored_state.reconciliation_required is False
+        restored_worker = store.heartbeats[Mt5ComponentCode.WORKER]
+        assert restored_worker.state is ComponentHeartbeatState.HEALTHY
     finally:
         polling.stop(timeout_seconds=2)
 

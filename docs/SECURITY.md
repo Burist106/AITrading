@@ -1,8 +1,10 @@
-# Milestone 2 Security Model
+# Aurum Console Security Model
 
 ## Scope
 
-Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; all three required jobs verified implementation commit `3e25007`. The milestone adds a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. It does not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project. Milestone 3 is not started or authorized.
+Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; all three required jobs verified implementation commit `3e25007`. That milestone added a Windows-only, read-only MT5 observation boundary to the local Supabase authorization and data-integrity foundation. Its release did not evaluate a strategy, create a proposal, execute or simulate an order, modify an MT5 Position, send a notification, or deploy a remote Supabase project.
+
+Milestone 3 is **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE BLOCKED**. Worker runtime, research strategy/risk/eligibility, immutable Shadow RPC records and authenticated owner-scoped pages are connected. Missing source providers remain unavailable, never fabricated. Dedicated Shadow storage cannot enter the legacy approval path. Auth uses bounded same-origin/CSRF-protected requests, server-verified identity and access-only protected cookies; no privileged-key fallback or credentials were provisioned. See [implementation](MILESTONE_3_IMPLEMENTATION.md). The native transaction-time gate remains closed; no native smoke was rerun or execution implemented.
 
 The invariant boundary is fixed:
 
@@ -131,6 +133,8 @@ Audit metadata is bounded and rejects secret-shaped keys such as tokens, passwor
 
 ## Credential and network rules
 
+The explicitly authorized local-profile follow-up is a narrow exception to the earlier process-only validation setup. It permits only manually confirmed path/symbol/account-hash/specification-hash metadata in current-user DPAPI ciphertext outside Git. No password or raw identity is accepted, and no opt-in, safety limit, or pass result is saved. Runtime revalidation, separate manual confirmation, fail-closed corruption handling, and the local threat model are documented in [LOCAL_MT5_PROFILE.md](LOCAL_MT5_PROFILE.md). It creates no browser, remote database, credential, or broker-write capability.
+
 - Local Supabase runs inside a disposable, pinned Docker-in-Docker boundary whose outer published ports are verified as IPv4 loopback-only. The inner Docker API remains on a private outer network and the host Docker socket is never mounted.
 - CLI start/status output is suppressed because it can contain local keys.
 - Exact image digests, privileged-container identity, labels, mounts, inner/outer network membership, and port mappings are checked before and after commands. A failed database command removes only the label-verified Aurum resources.
@@ -141,8 +145,8 @@ Audit metadata is bounded and rejects secret-shaped keys such as tokens, passwor
 
 ## Defense responsibilities outside the database
 
-Database constraints enforce identity, ownership, version, lifecycle, Demo/XAUUSD, volume, Stop Loss, and immutable-policy ceilings. The read-only Worker verifies account/symbol/tick state and reconciles current Position/Order identities, but it does not evaluate strategy eligibility, news windows, realized loss, drawdown, order margin, or broker execution response. Those checks belong to future explicitly authorized milestones. Every operational outcome remains fail-closed and no command has a broker side effect.
+Database constraints enforce identity, ownership, version, lifecycle, Demo/XAUUSD, volume, Stop Loss and immutable-policy ceilings. The integrated read-only Worker checks current source evidence; a recorded research cycle is not current execution authority. Missing or uncertain inputs must block. Source receipts and risk-input digests identify evidence but do not manufacture unavailable ledger/calendar/cost providers or complete replay archives. Broker calculation/check/submission calls and execution-response handling remain outside this milestone's native allowlist. No command has a broker side effect.
 
-## Verification status for this patch
+## Historical Milestone 2 verification (2026-09-02)
 
-Worker, Web, contract, fixture, and database regressions cover component allowlists, continuous renewal, authoritative-state caps, `reconciliation_required`, all tick-freshness outcomes, bounded upserts, no audit growth, forced RLS, least privilege, owner isolation, expiry-derived `unknown`, and safe Thai labels. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; formatting, lint, type-check, builds, generated types, dependency checks, and all repository security scans passed. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`. The real-terminal smoke remains `NOT RUN`.
+Worker, Web, contract, fixture, and database regressions cover component allowlists, continuous renewal, authoritative-state caps, `reconciliation_required`, all tick-freshness outcomes, bounded upserts, no audit growth, forced RLS, least privilege, owner isolation, expiry-derived `unknown`, and safe Thai labels. The final local run passed 88 TypeScript tests, 233 Worker tests, 400 pgTAP assertions, and four concurrent-claim assertions; formatting, lint, type-check, builds, generated types, dependency checks, and all repository security scans passed. Pull Request run `33541088560` passed all three required jobs on implementation commit `3e25007`. The original release-time real-terminal smoke was `NOT RUN`. Later blocked-native evidence is preserved in [the readiness record](MILESTONE_3_READINESS.md); current component verification is recorded in [the implementation document](MILESTONE_3_IMPLEMENTATION.md).

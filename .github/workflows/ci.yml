@@ -102,7 +102,9 @@ jobs:
           $version = & .venv/Scripts/python.exe -c "import importlib.metadata; print(importlib.metadata.version('MetaTrader5'))"
           if ($version -ne "5.0.6090") { throw "Unexpected MetaTrader5 package version" }
           & .venv/Scripts/python.exe -c "import MetaTrader5"
-      - name: Run native wrapper unit tests
-        run: .venv/Scripts/python.exe -m pytest apps/worker/tests/test_mt5_native.py apps/worker/tests/test_mt5_models.py
+      - name: Run native wrapper and Shadow boundary unit tests
+        run: .venv/Scripts/python.exe -m pytest apps/worker/tests/test_mt5_native.py apps/worker/tests/test_mt5_models.py apps/worker/tests/test_mt5_tick_time.py apps/worker/tests/test_local_mt5_profile.py apps/worker/tests/test_mt5_profile_setup.py apps/worker/tests/test_mt5_profile_cli.py apps/worker/tests/test_mt5_market_time.py apps/worker/tests/test_mt5_market_provider.py apps/worker/tests/test_mt5_market_policy.py apps/worker/tests/test_mt5_market_cli.py apps/worker/tests/test_mt5_transaction_inventory.py apps/worker/tests/test_mt5_reconciliation.py apps/worker/tests/test_shadow_market.py apps/worker/tests/test_shadow_risk.py
       - name: Run secret and runtime boundary scanners
         run: pnpm security
+      - name: Run Shadow runtime and local replay boundaries
+        run: .venv/Scripts/python.exe -m pytest apps/worker/tests/test_shadow_pipeline.py apps/worker/tests/test_shadow_runtime.py apps/worker/tests/test_shadow_cli.py apps/worker/tests/test_shadow_replay.py apps/worker/tests/test_shadow_replay_archive.py apps/worker/tests/test_shadow_replay_cli.py apps/worker/tests/test_worker_http.py

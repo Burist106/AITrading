@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import process from "node:process";
 import ts from "typescript";
@@ -37,13 +37,28 @@ const FRONTEND_PRIVILEGED_IDENTIFIERS = new Set([
   "WORKER_CREDENTIAL",
 ]);
 
-function gitTrackedFiles(root) {
+function gitRepositoryFiles(root) {
   const output = execFileSync(
     "git",
-    ["-C", root, "ls-files", "-z", "--", ...PRODUCTION_ROOTS],
+    [
+      "-C",
+      root,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ...PRODUCTION_ROOTS,
+    ],
     { encoding: "buffer" },
   );
-  return output.toString("utf8").split("\0").filter(Boolean);
+  return [
+    ...new Set(output.toString("utf8").split("\0").filter(Boolean)),
+  ].filter((path) => {
+    const absolute = resolve(root, path);
+    return existsSync(absolute) && lstatSync(absolute).isFile();
+  });
 }
 
 function scriptKind(path) {
@@ -134,7 +149,8 @@ function pythonExecutable(root) {
   return candidate;
 }
 
-export function scanRuntimeFiles(root, files = gitTrackedFiles(root)) {
+export function scanRuntimeFiles(root, files = gitRepositoryFiles(root)) {
+  files = [...new Set(files)];
   const findings = [];
   const pythonFiles = [];
   for (const path of files) {

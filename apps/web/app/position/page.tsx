@@ -1,20 +1,17 @@
-import type { Metadata } from "next";
+import { ShadowShell } from "../../components/ShadowConsole";
+import { EmptyState } from "../../components/ui";
+import { loadShadowScreen } from "../../lib/shadow-session";
 
-import { ApplicationShell } from "../../components/ApplicationShell";
-import { PositionView } from "../../components/PositionView";
-import { loadScenarioView, type ScenarioQuery } from "../../lib/scenario";
-
-export const metadata: Metadata = { title: "Position" };
-
-export default async function PositionPage({
-  searchParams,
-}: {
-  searchParams: ScenarioQuery;
-}) {
-  const view = await loadScenarioView(searchParams);
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Position" };
+export default async function PositionPage() {
+  const screen = await loadShadowScreen();
   return (
-    <ApplicationShell scenario={view.scenario} scenarioId={view.scenarioId}>
-      <PositionView view={view} />
-    </ApplicationShell>
+    <ShadowShell screen={screen} title="Position · ไม่มีความสามารถซื้อขาย">
+      <EmptyState
+        title="Shadow ไม่สร้าง Position โบรกเกอร์"
+        description="หน้านี้ไม่มีหลักฐาน Position ปัจจุบัน จึงไม่แสดงราคา P/L หรืออ้างว่าไม่มี Position เปิดอยู่ ผลสังเกตแบบสมมติอยู่ในบันทึกผล Shadow"
+      />
+    </ShadowShell>
   );
 }

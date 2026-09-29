@@ -4,7 +4,12 @@ import process from "node:process";
 
 const buildRoot = "apps/web/.next";
 const developmentOutput = join(buildRoot, "dev");
-const marker = "AURUM_DEVELOPMENT_STATE_SIMULATOR";
+const markers = [
+  "AURUM_DEVELOPMENT_STATE_SIMULATOR",
+  "demo-proposal",
+  "Fixture market snapshot",
+  "Central prototype/demo fixtures",
+];
 const searchable = new Set([".html", ".js", ".json", ".map", ".txt"]);
 
 function walk(path) {
@@ -17,17 +22,19 @@ function walk(path) {
 try {
   const leaked = walk(buildRoot)
     .filter((file) => searchable.has(extname(file)))
-    .filter((file) => readFileSync(file, "utf8").includes(marker));
+    .filter((file) =>
+      markers.some((marker) => readFileSync(file, "utf8").includes(marker)),
+    );
 
   if (leaked.length > 0) {
     console.error(
-      `Production bundle contains the development simulator marker:\n${leaked.join("\n")}`,
+      `Production bundle contains a development fixture/simulator marker:\n${leaked.join("\n")}`,
     );
     process.exit(1);
   }
 
   console.log(
-    "Production bundle check passed: Development State Simulator marker is absent.",
+    "Production bundle check passed: development fixture and simulator markers are absent.",
   );
 } catch (error) {
   console.error(`Production bundle check failed: ${error.message}`);

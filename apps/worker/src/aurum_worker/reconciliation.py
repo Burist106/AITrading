@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -15,6 +15,7 @@ from aurum_worker.adapters.protocols import (
 from aurum_worker.models.mt5 import (
     AccountObservation,
     AccountVerificationState,
+    BrokerSymbolObservation,
     ConfirmedSymbolBinding,
     DatabaseReconciliationState,
     HealthState,
@@ -33,9 +34,10 @@ from aurum_worker.models.mt5 import (
     ReconciliationReport,
     SafeMt5Error,
     SymbolUsabilityState,
+    TerminalObservation,
     TickFreshness,
 )
-from aurum_worker.mt5_safety import verify_account
+from aurum_worker.mt5_safety import decision_tick_state, verify_account
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,8 +204,8 @@ class ReadOnlyReconciliationService:
             if failure.error.reason_code is not Mt5ReasonCode.HISTORY_QUERY_FAILED:
                 raise
             return [], self._failed_history_evidence("orders", request)
-        times = [row.setup_at for row in rows]
-        return rows, self._successful_history_evidence("orders", request, times)
+        times = [row.completed_at for row in rows]
+        return rows, self._returned_history_evidence("orders", request, times)
 
     def _deal_history(
         self, request: HistoryRequest, trace_id: str
@@ -215,30 +217,37 @@ class ReadOnlyReconciliationService:
                 raise
             return [], self._failed_history_evidence("deals", request)
         times = [row.occurred_at for row in rows]
-        return rows, self._successful_history_evidence("deals", request, times)
+        return rows, self._returned_history_evidence("deals", request, times)
 
-    def _successful_history_evidence(
-        self, history_kind: str, request: HistoryRequest, timestamps: list[datetime]
+    def _returned_history_evidence(
+        self,
+        history_kind: str,
+        request: HistoryRequest,
+        timestamps: Sequence[datetime | None],
     ) -> HistoryQueryEvidence:
-        is_empty = not timestamps
+        known_times = [timestamp for timestamp in timestamps if timestamp is not None]
+        if not timestamps:
+            result_state = HistoryQueryResultState.EMPTY_VALID_RESULT
+            reason_code = Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT
+        elif len(known_times) != len(timestamps) or any(
+            timestamp < request.start_at or timestamp > request.end_at
+            for timestamp in known_times
+        ):
+            result_state = HistoryQueryResultState.WINDOW_INCOMPLETE
+            reason_code = Mt5ReasonCode.HISTORY_WINDOW_INCOMPLETE
+        else:
+            result_state = HistoryQueryResultState.QUERY_SUCCEEDED
+            reason_code = Mt5ReasonCode.HEALTHY
         return HistoryQueryEvidence(
             history_kind="orders" if history_kind == "orders" else "deals",
             requested_start_at=request.start_at,
             requested_end_at=request.end_at,
             query_completed_at=self._clock(),
             returned_count=len(timestamps),
-            earliest_returned_at=min(timestamps) if timestamps else None,
-            latest_returned_at=max(timestamps) if timestamps else None,
-            result_state=(
-                HistoryQueryResultState.EMPTY_VALID_RESULT
-                if is_empty
-                else HistoryQueryResultState.QUERY_SUCCEEDED
-            ),
-            reason_code=(
-                Mt5ReasonCode.HISTORY_EMPTY_VALID_RESULT
-                if is_empty
-                else Mt5ReasonCode.HEALTHY
-            ),
+            earliest_returned_at=min(known_times) if known_times else None,
+            latest_returned_at=max(known_times) if known_times else None,
+            result_state=result_state,
+            reason_code=reason_code,
         )
 
     def _failed_history_evidence(
@@ -255,6 +264,98 @@ class ReadOnlyReconciliationService:
             result_state=HistoryQueryResultState.QUERY_FAILED,
             reason_code=Mt5ReasonCode.HISTORY_QUERY_FAILED,
         )
+
+    def _validate_current_context(
+        self,
+        *,
+        trace_id: str,
+        account: AccountObservation,
+        specification: BrokerSymbolObservation,
+        database: DatabaseReconciliationState,
+    ) -> TerminalObservation:
+        """Reject mixed observations; a full read is not an atomic broker snapshot."""
+        self._current_account_terminal(account, trace_id=trace_id)
+        current_database = self._persistence.load_reconciliation_state()
+        if (
+            current_database.account_fingerprint != database.account_fingerprint
+            or current_database.server_fingerprint != database.server_fingerprint
+        ):
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.ACCOUNT_BINDING_MISMATCH,
+                    "Confirmed account state changed during reconciliation.",
+                )
+            )
+        if (
+            current_database.confirmed_symbol_binding
+            != database.confirmed_symbol_binding
+        ):
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.SYMBOL_SPEC_CHANGED,
+                    "Confirmed symbol binding changed during reconciliation.",
+                )
+            )
+        if current_database != database:
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.RECONCILIATION_INCOMPLETE,
+                    "Protected database state changed during reconciliation.",
+                )
+            )
+        current_specification = self._adapter.get_symbol_specification(
+            specification.broker_symbol, trace_id=trace_id
+        )
+        if (
+            current_specification.specification_fingerprint
+            != specification.specification_fingerprint
+            or current_specification.usability_state is not SymbolUsabilityState.USABLE
+        ):
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.SYMBOL_SPEC_CHANGED,
+                    "Observed symbol specification changed during reconciliation.",
+                )
+            )
+        return self._current_account_terminal(account, trace_id=trace_id)
+
+    def _current_account_terminal(
+        self, account: AccountObservation, *, trace_id: str
+    ) -> TerminalObservation:
+        terminal = self._adapter.get_terminal_info(trace_id=trace_id)
+        if not terminal.connected:
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.TERMINAL_DISCONNECTED,
+                    "Terminal disconnected during reconciliation.",
+                )
+            )
+        current_account = self._adapter.get_account_info(trace_id=trace_id)
+        verification = verify_account(
+            current_account, self._config.expected_account_fingerprint
+        )
+        if verification.state not in {
+            AccountVerificationState.VERIFIED_DEMO_BOUND,
+            AccountVerificationState.VERIFIED_DEMO_UNBOUND,
+        }:
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    verification.reason_code,
+                    "Current Demo verification failed during reconciliation.",
+                )
+            )
+        if (
+            current_account.account_fingerprint != account.account_fingerprint
+            or current_account.server_fingerprint != account.server_fingerprint
+            or current_account.trade_mode is not account.trade_mode
+        ):
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.ACCOUNT_BINDING_MISMATCH,
+                    "Account identity changed during reconciliation.",
+                )
+            )
+        return terminal
 
     def run(self, *, trace_id: str) -> ReconciliationResult:
         started_at = self._clock()
@@ -402,14 +503,24 @@ class ReadOnlyReconciliationService:
         _deal_history_rows, deal_evidence = self._deal_history(
             history_request, trace_id
         )
-        self._persistence.upsert_tick(tick, account.account_fingerprint)
-
+        terminal = self._validate_current_context(
+            trace_id=trace_id,
+            account=account,
+            specification=specification,
+            database=database,
+        )
+        tick_freshness, tick_age = decision_tick_state(
+            tick,
+            now=self._clock(),
+            max_tick_age_seconds=self._config.max_tick_age_seconds,
+            max_clock_drift_seconds=self._config.max_clock_drift_seconds,
+        )
         mismatches = self._mismatches(
             account=account,
             binding=binding,
             broker_symbol=broker_symbol,
             specification_fingerprint=specification.specification_fingerprint,
-            tick_freshness=tick.freshness,
+            tick_freshness=tick_freshness,
             broker_positions={position.ticket for position in positions},
             broker_orders={order.ticket for order in orders},
             order_history_evidence=order_evidence,
@@ -439,23 +550,49 @@ class ReadOnlyReconciliationService:
             order_history_evidence=order_evidence,
             deal_history_evidence=deal_evidence,
         )
+        # Freeze the evidence instant before either write can block. A slow
+        # upsert must not make the earlier checks appear to have happened later.
+        self._persistence.upsert_tick(tick, account.account_fingerprint)
         self._persist_report(report)
 
+        # Persistence may take time or overlap a terminal/account switch. The
+        # immutable report describes its own earlier observation instant; it is
+        # not permission to return a current Healthy result after slow writes.
+        terminal = self._validate_current_context(
+            trace_id=trace_id,
+            account=account,
+            specification=specification,
+            database=database,
+        )
+        decision_at = self._clock()
+        if decision_at < report.completed_at:
+            raise Mt5ReadFailure(
+                self._safe_error(
+                    Mt5ReasonCode.CLOCK_DRIFT_EXCEEDED,
+                    "Decision clock precedes reconciliation completion.",
+                )
+            )
+        tick_freshness, tick_age = decision_tick_state(
+            tick.model_copy(update={"freshness": tick_freshness}),
+            now=decision_at,
+            max_tick_age_seconds=self._config.max_tick_age_seconds,
+            max_clock_drift_seconds=self._config.max_clock_drift_seconds,
+        )
         health_state = HealthState.HEALTHY
         health_reason = Mt5ReasonCode.HEALTHY
         if outcome is not ReconciliationOutcome.MATCHED:
             health_state = HealthState.BLOCKED
             health_reason = report.reason_code
-        elif tick.freshness is TickFreshness.STALE:
+        elif tick_freshness is TickFreshness.STALE:
             health_state = HealthState.BLOCKED
             health_reason = Mt5ReasonCode.TICK_STALE
-        elif tick.freshness is TickFreshness.FUTURE_INVALID:
+        elif tick_freshness is TickFreshness.FUTURE_INVALID:
             health_state = HealthState.BLOCKED
             health_reason = Mt5ReasonCode.TICK_FROM_FUTURE
-        elif tick.freshness is TickFreshness.UNAVAILABLE:
+        elif tick_freshness is TickFreshness.UNAVAILABLE:
             health_state = HealthState.BLOCKED
             health_reason = Mt5ReasonCode.TICK_UNAVAILABLE
-        elif tick.freshness is TickFreshness.DELAYED:
+        elif tick_freshness is TickFreshness.DELAYED:
             health_state = HealthState.DEGRADED
             health_reason = Mt5ReasonCode.TICK_DELAYED
         elif verification.state is AccountVerificationState.VERIFIED_DEMO_UNBOUND:
@@ -473,7 +610,7 @@ class ReadOnlyReconciliationService:
             masked_server=account.masked_server,
             broker_symbol=broker_symbol,
             specification_fingerprint=specification.specification_fingerprint,
-            tick_age=tick.age_seconds,
+            tick_age=tick_age,
             reconciliation_outcome=report.outcome,
             positions=len(positions),
             orders=len(orders),
@@ -483,7 +620,7 @@ class ReadOnlyReconciliationService:
             health=health,
             position_tickets=frozenset(position.ticket for position in positions),
             active_order_tickets=frozenset(order.ticket for order in orders),
-            tick_freshness=tick.freshness,
+            tick_freshness=tick_freshness,
         )
 
     @staticmethod

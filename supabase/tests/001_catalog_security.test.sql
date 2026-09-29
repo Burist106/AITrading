@@ -505,6 +505,7 @@ select set_eq(
     ('system_incidents'), ('broker_orders'), ('broker_symbols'),
     ('mt5_account_observations'), ('mt5_symbol_observations'),
     ('mt5_latest_tick_observations'), ('mt5_history_query_evidence'),
+    ('trading_accounts'), ('trading_modes'), ('shadow_cycles'), ('shadow_outcome_events'),
     ('mt5_reconciliation_runs'),
     ('mt5_reconciliation_mismatches')$$,
   'secured function owner SELECT grants match the exact RPC read set'
@@ -522,6 +523,7 @@ select set_eq(
     ('audit_logs'), ('mt5_account_observations'),
     ('mt5_symbol_observations'), ('mt5_latest_tick_observations'),
     ('mt5_history_query_evidence'), ('mt5_reconciliation_runs'),
+    ('shadow_cycles'), ('shadow_outcome_events'),
     ('mt5_reconciliation_mismatches')$$,
   'secured function owner INSERT grants match the exact durable-write set'
 );
@@ -558,6 +560,9 @@ select set_eq(
     where namespace.nspname = 'public'
       and policy_role.rolname = 'aurum_function_owner'$$,
   $$values
+    ('trading_accounts:r'), ('trading_modes:r'),
+    ('shadow_cycles:r'), ('shadow_cycles:a'),
+    ('shadow_outcome_events:r'), ('shadow_outcome_events:a'),
     ('risk_policies:r'), ('risk_policies:w'),
     ('risk_policy_versions:r'), ('risk_policy_versions:a'),
     ('trade_proposals:r'),

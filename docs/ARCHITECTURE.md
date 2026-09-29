@@ -1,8 +1,10 @@
-# Aurum Console Milestone 2 Architecture
+# Aurum Console Architecture
 
 ## Scope and invariants
 
-This repository implements **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** on the Bootstrap and Milestone 1 foundations. Its release status is **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; that run verified `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. The system observes an already-open Demo terminal, persists only sanitized read models, and reconciles broker observations against separately confirmed durable state. It is still not a strategy, risk, approval, trading, or broker-execution system.
+The released **Milestone 2 — Windows MT5 Read-Only Worker and restart/reconnect reconciliation** builds on the Bootstrap and Milestone 1 foundations. Its release status is **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; that run verified `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. That foundation observes an already-open Demo terminal, persists sanitized read models, and reconciles broker observations against separately confirmed durable state.
+
+Milestone 3 is **IN PROGRESS — INTEGRATED DEMO/SHADOW CODE; REAL-SOURCE ACCEPTANCE BLOCKED**. The serialized Worker now connects market/features, a research baseline, risk/eligibility, dedicated immutable Shadow records and authenticated owner-scoped pages. Genuine ledger/news/cost/safety providers and hosted configuration remain unresolved alongside native transaction-time readiness. See [implementation and runbook](MILESTONE_3_IMPLEMENTATION.md). No native smoke was rerun and no full real-source pass is established.
 
 The following invariants apply at every boundary:
 
@@ -20,7 +22,7 @@ The following invariants apply at every boundary:
 
 ```text
 apps/web                 Next.js App Router static P0 shell and read-only control-plane boundary
-apps/worker              Typed Python Worker with fake and Windows-only MT5 read adapters; no command consumer
+apps/worker              Typed Python Worker, MT5 read adapters, market/feature and risk components; no command consumer
 packages/contracts       Hand-written Zod contracts plus generated Supabase database types
 contract-fixtures        One versioned TS/Python parity corpus
 fixtures                 Authoritative 20 presentation-only design scenarios
@@ -57,7 +59,7 @@ The crossed path is deliberate: a database command is control-plane intent, not 
 
 ## Web boundary
 
-`apps/web` remains primarily a fixture-driven presentation layer and now has a bounded MT5 observation panel plus an owner-scoped Supabase read adapter for account, symbol, latest tick, reconciliation, mismatch, and safe health projections. Loading, empty, degraded, blocked, stale, reconnecting, pending, and failed states are explicit. The health view distinguishes `execution.worker` as “Aurum Worker”, `execution.mt5_adapter` as “การเชื่อมต่อ MT5”, and `execution.market_data` as “ข้อมูลตลาด XAU/USD”. Missing, expired, duplicate, or schema-invalid heartbeat rows derive `effectiveState = unknown`; producer code never persists `unknown`. No MT5 control or browser write capability exists.
+`apps/web` production routes now use a server-verified Supabase Auth session and a bounded SELECT-only Shadow gateway. Dashboard, UUID decision details and journal validate owner/index/payload agreement, complete event chains and microsecond time bounds. No-data, invalid, disconnected and stale states never substitute fixtures. The health page labels persisted pipeline evidence; Position evidence remains explicitly unavailable. Legacy MT5/heartbeat mappers and design components remain separately tested, not a claim that every legacy diagnostic is deployed. No MT5 control or protected operational browser-write capability exists.
 
 The web control-plane boundary is read-only by construction. Protected writes are not exposed by repository adapters. Authenticated actions, when a later UI connects them, must call the specific intent functions and receive durable command identifiers; browser code cannot insert, update, or delete operational rows. Public browser configuration may never include a Worker or Supabase secret.
 
@@ -121,7 +123,7 @@ See [DATABASE_FOUNDATION.md](./DATABASE_FOUNDATION.md) for the table/queue model
 
 ## Responsibility boundaries
 
-The database can enforce Demo/XAUUSD identity, volume and Position ceilings, mandatory Stop Loss shape, immutable prohibited-strategy flags, ownership, versions, expiry ordering, idempotency, command state, and leases. It cannot evaluate current spread, market freshness, news, realized loss, drawdown, broker margin, broker response, or reconciliation without future live inputs. Those remain fail-closed responsibilities of later explicitly authorized Risk Engine and Worker milestones.
+The database enforces identity, ownership, immutable versions, bounded financial wire values, expiry, idempotency and ordered outcomes. The M3 Worker validates current market/risk evidence and records dedicated non-executable research cycles; its default external evidence provider returns unavailable. The input digest and independent source receipts retain trace identity, not full ledger replay. Broker margin/profit calls and execution-response handling remain outside the current native allowlist and belong to the later Demo execution milestone.
 
 ## Heartbeat patch verification status
 
@@ -131,11 +133,11 @@ Regression coverage includes continuous component renewal, failed/degraded autho
 
 The following remain deliberately absent:
 
-- market ingestion, feature computation, strategy, deterministic live Risk Engine, and Shadow proposal production;
+- runtime orchestration of market/feature and risk components, the baseline strategy, Shadow proposal production, durable journal/outcomes, and dashboard integration;
 - hosted Worker credential issuance and service deployment;
 - LINE/LIFF approval, notification delivery, Conditional Auto, and post-execution reconciliation;
 - every broker write, execution result, Position mutation, and Order mutation;
 - Local Emergency Stop tray/CLI behavior;
 - P1 live analysis, AI/ML decisions, P2 analytics, cloud deployment, and all Live Trading capability.
 
-See `docs/IMPLEMENTATION_ROADMAP.md` for the authorized milestone order. This patch does not start or authorize Milestone 3.
+See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md) for current work and [the roadmap](IMPLEMENTATION_ROADMAP.md) for later authorization gates. Milestone 3 implementation does not authorize approval/command consumption or broker execution, and cannot clear the unresolved [native readiness gate](MILESTONE_3_READINESS.md).

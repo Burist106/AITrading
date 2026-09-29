@@ -1183,6 +1183,91 @@ export type Database = {
           },
         ];
       };
+      shadow_cycles: {
+        Row: {
+          created_at: string;
+          cycle_key: string;
+          evaluated_at: string;
+          id: string;
+          owner_id: string;
+          payload: Json;
+          status: string;
+          trading_account_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          cycle_key: string;
+          evaluated_at: string;
+          id: string;
+          owner_id: string;
+          payload: Json;
+          status: string;
+          trading_account_id: string;
+        };
+        Update: {
+          created_at?: string;
+          cycle_key?: string;
+          evaluated_at?: string;
+          id?: string;
+          owner_id?: string;
+          payload?: Json;
+          status?: string;
+          trading_account_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shadow_cycles_trading_account_id_owner_id_fkey";
+            columns: ["trading_account_id", "owner_id"];
+            isOneToOne: false;
+            referencedRelation: "trading_accounts";
+            referencedColumns: ["id", "owner_id"];
+          },
+        ];
+      };
+      shadow_outcome_events: {
+        Row: {
+          created_at: string;
+          cycle_id: string;
+          id: string;
+          observed_at: string;
+          owner_id: string;
+          payload: Json;
+          sequence: number;
+          status: string;
+          trading_account_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          cycle_id: string;
+          id: string;
+          observed_at: string;
+          owner_id: string;
+          payload: Json;
+          sequence: number;
+          status: string;
+          trading_account_id: string;
+        };
+        Update: {
+          created_at?: string;
+          cycle_id?: string;
+          id?: string;
+          observed_at?: string;
+          owner_id?: string;
+          payload?: Json;
+          sequence?: number;
+          status?: string;
+          trading_account_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shadow_outcome_events_cycle_id_owner_id_trading_account_id_fkey";
+            columns: ["cycle_id", "owner_id", "trading_account_id"];
+            isOneToOne: false;
+            referencedRelation: "shadow_cycles";
+            referencedColumns: ["id", "owner_id", "trading_account_id"];
+          },
+        ];
+      };
       system_command_events: {
         Row: {
           actor_id: string;
@@ -2165,6 +2250,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      worker_append_shadow_outcome: { Args: { p_event: Json }; Returns: Json };
       worker_begin_reconciliation: { Args: { report: Json }; Returns: string };
       worker_claim_next_command: {
         Args: { lease_seconds?: number };
@@ -2234,6 +2320,14 @@ export type Database = {
         };
       };
       worker_read_mt5_reconciliation_state: { Args: never; Returns: Json };
+      worker_read_shadow_context: {
+        Args: { p_trading_account_id: string };
+        Returns: Json;
+      };
+      worker_read_shadow_cycles: {
+        Args: { p_cycle_key?: string; p_trading_account_id: string };
+        Returns: Json;
+      };
       worker_record_heartbeat: {
         Args: {
           component_code: string;
@@ -2273,6 +2367,7 @@ export type Database = {
         Args: { mismatch: Json; reconciliation_id: string };
         Returns: string;
       };
+      worker_record_shadow_cycle: { Args: { p_cycle: Json }; Returns: Json };
       worker_reject_command: {
         Args: {
           command_id: string;

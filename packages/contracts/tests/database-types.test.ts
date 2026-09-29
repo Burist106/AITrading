@@ -32,6 +32,8 @@ const TABLE_NAMES = [
   "risk_checks",
   "risk_policies",
   "risk_policy_versions",
+  "shadow_cycles",
+  "shadow_outcome_events",
   "system_command_events",
   "system_commands",
   "system_components",
@@ -86,6 +88,7 @@ const USER_FUNCTION_NAMES = [
 ] as const;
 
 const WORKER_FUNCTION_NAMES = [
+  "worker_append_shadow_outcome",
   "worker_begin_reconciliation",
   "worker_claim_next_command",
   "worker_complete_reconciliation",
@@ -96,6 +99,9 @@ const WORKER_FUNCTION_NAMES = [
   "worker_record_heartbeat",
   "worker_record_incident",
   "worker_read_mt5_reconciliation_state",
+  "worker_read_shadow_context",
+  "worker_read_shadow_cycles",
+  "worker_record_shadow_cycle",
   "worker_record_mt5_account_observation",
   "worker_record_mt5_symbol_observation",
   "worker_record_reconciliation_mismatch",
@@ -158,11 +164,11 @@ describe("generated database type parity", () => {
     expect(POSITION_STATUSES).toHaveLength(5);
   });
 
-  it("contains exactly the 27 Milestone 2 tables", () => {
+  it("contains exactly the 29 tables including the isolated Shadow journal", () => {
     expectTypeOf<keyof Database["public"]["Tables"]>().toEqualTypeOf<
       (typeof TABLE_NAMES)[number]
     >();
-    expect(TABLE_NAMES).toHaveLength(27);
+    expect(TABLE_NAMES).toHaveLength(29);
     expect(TABLE_NAMES).not.toContain("notifications");
     expect(TABLE_NAMES).not.toContain("candles");
     expect(TABLE_NAMES).not.toContain("strategies");
@@ -185,13 +191,13 @@ describe("generated database type parity", () => {
     expect(COMMAND_VIEW_COLUMNS).toHaveLength(26);
   });
 
-  it("contains all and only nine user plus sixteen Worker functions", () => {
+  it("contains all and only nine user plus twenty Worker functions", () => {
     expectTypeOf<keyof Database["public"]["Functions"]>().toEqualTypeOf<
       (typeof FUNCTION_NAMES)[number]
     >();
     expect(USER_FUNCTION_NAMES).toHaveLength(9);
-    expect(WORKER_FUNCTION_NAMES).toHaveLength(16);
-    expect(FUNCTION_NAMES).toHaveLength(25);
+    expect(WORKER_FUNCTION_NAMES).toHaveLength(20);
+    expect(FUNCTION_NAMES).toHaveLength(29);
   });
 
   it("preserves important row nullability and safety columns", () => {

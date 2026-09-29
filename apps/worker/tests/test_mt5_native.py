@@ -175,11 +175,11 @@ class NativeModuleFake:
         self.calls.append("orders_get")
         return self.order_result
 
-    def history_orders_get(self, start: datetime, end: datetime) -> object:
+    def history_orders_get(self, start: datetime | int, end: datetime | int) -> object:
         self.calls.append("history_orders_get")
         return self.order_history_result
 
-    def history_deals_get(self, start: datetime, end: datetime) -> object:
+    def history_deals_get(self, start: datetime | int, end: datetime | int) -> object:
         self.calls.append("history_deals_get")
         return self.deal_history_result
 
@@ -815,8 +815,11 @@ def test_position_order_and_history_rows_are_safely_normalized(tmp_path: Path) -
         sl=2335.1,
         tp=2365.1,
         time_setup=int(NOW.timestamp()),
+        time_setup_msc=int(NOW.timestamp()) * 1_000,
         time_done=int(NOW.timestamp()),
+        time_done_msc=int(NOW.timestamp()) * 1_000,
         time_expiration=0,
+        type_time=0,
         comment="password=" + "must-not-cross",
     )
     module.position_result = (
@@ -833,6 +836,7 @@ def test_position_order_and_history_rows_are_safely_normalized(tmp_path: Path) -
             swap=-0.1,
             magic=42,
             time=int(NOW.timestamp()),
+            time_msc=int(NOW.timestamp()) * 1_000,
             login="must-not-cross",
         ),
     )
@@ -851,6 +855,7 @@ def test_position_order_and_history_rows_are_safely_normalized(tmp_path: Path) -
             commission=-0.2,
             swap=-0.1,
             time=int(NOW.timestamp()),
+            time_msc=int(NOW.timestamp()) * 1_000,
             comment="password=" + "must-not-cross",
         ),
     )

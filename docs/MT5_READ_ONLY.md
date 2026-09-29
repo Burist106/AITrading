@@ -2,7 +2,9 @@
 
 ## Scope
 
-Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; all three required jobs verified implementation commit `3e25007`. The Worker observes one already-open MetaTrader 5 Demo terminal for canonical `XAUUSD`. The environment remains `DEMO_ONLY`, runtime mode remains `SHADOW`, maximum permitted volume remains `0.01`, maximum open Positions remains one, and a Stop Loss remains mandatory for any future proposal. This milestone contains no strategy, proposal generation, Risk Engine, approval, command consumer, order execution, broker write, or Position mutation. Milestone 3 is not started or authorized.
+Milestone 2 has the release status **COMPLETE WITH DOCUMENTED LIMITATIONS**. The final heartbeat/liveness local gates and Pull Request run `33541088560` passed on 2026-09-02; all three required jobs verified implementation commit `3e25007`. The Worker observes one already-open MetaTrader 5 Demo terminal for canonical `XAUUSD`. The environment remains `DEMO_ONLY`, runtime mode remains `SHADOW`, maximum permitted volume remains `0.01`, maximum open Positions remains one, and a Stop Loss remains mandatory for any future proposal. That released milestone contained no strategy, proposal generation, Risk Engine, approval, command consumer, order execution, broker write, or Position mutation.
+
+Milestone 3 is **IN PROGRESS — PRODUCTION DEMO/SHADOW COMPONENTS; NOT COMPLETE**, authorized on 2026-09-22. Production market normalization, features, deterministic risk, orchestration, baseline Shadow research, persistence/journal, local replay and authenticated dashboard code are implemented; genuine external evidence providers, hosted setup and real-source acceptance remain unresolved. See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md). The 2026-09-28 follow-up prioritizes M2 boundary fixes over additional M3 features. No native smoke was rerun for that follow-up. Development does not expand the native allowlist or relax the existing fail-closed gates.
 
 The optional native dependency is exactly:
 
@@ -55,10 +57,13 @@ Dynamic lookup or dispatch of MT5 calls is also forbidden. The syntax-aware runt
 
 ## Configuration
 
+The user-authorized [remembered local Demo profile](LOCAL_MT5_PROFILE.md) provides a separate desktop setup and profile-backed command path. It stores only manually confirmed local binding values as current-user Windows DPAPI ciphertext across restarts. It does not change the environment-backed commands or the deployed database-backed Worker described below.
+
 Only these local variables are recognized:
 
 ```text
 AURUM_MT5_TERMINAL_PATH
+AURUM_MT5_TRANSACTION_TIME_POLICY
 AURUM_MT5_BROKER_SYMBOL
 AURUM_MT5_EXPECTED_ACCOUNT_FINGERPRINT
 AURUM_MT5_SMOKE_CONFIRMED_SPECIFICATION_FINGERPRINT
@@ -96,17 +101,27 @@ Symbol evidence appends when the specification fingerprint or material usability
 
 ## Decimal, ticket, and time policy
 
-All native numeric values are converted with `Decimal(str(value))`; NaN and infinity are rejected. Decimal JSON boundaries are canonical strings, never JavaScript numbers. Ticket identifiers are strings so values above JavaScript's safe integer range remain exact. The shared parity fixture is consumed by Vitest and pytest.
+Native decimal quantities are converted with `Decimal(str(value))`; NaN and infinity are rejected. Native account trade mode and tick seconds/milliseconds require non-boolean integral values; floats and numeric strings are not silently coerced. Nonzero milliseconds must agree with whole seconds in both UTC and the optional market policy. Absent/zero milliseconds retain the seconds fallback. Decimal JSON boundaries are canonical strings, never JavaScript numbers. Ticket identifiers are strings so values above JavaScript's safe integer range remain exact. The shared parity fixture is consumed by Vitest and pytest.
+
+Transaction ingestion under the default UTC policy is stricter than the tick fallback: Position opening, active/historical Order setup, historical completion and Deal occurrence require both native integral seconds and milliseconds. Exact integer arithmetic preserves milliseconds, rejects inconsistent or absent pairs, and prevents a just-outside-window event from being rounded into successful history evidence. Events cannot exceed that row's observation time by more than the existing configured clock-drift limit. Historical completion cannot precede setup; only an explicit `(0,0)` completion pair maps to missing completion, which still blocks successful reconciliation evidence. Native direction, Order type and Order state are integral scalars, not coerced strings/floats/booleans. These checks are at the native ingestion boundary; they do not add a timezone interpretation to the independent diagnostic reports.
+
+Active Order expiration requires integral `type_time` and `time_expiration`. The supported conservative subset is GTC (`0`) with zero, or SPECIFIED (`2`) with a positive timestamp at or after setup. A specified expiration may legitimately be in the future. DAY (`1`), SPECIFIED_DAY (`3`), unknown modes and inconsistent combinations fail closed because this observation model cannot represent their session-dependent semantics. Zero means no explicit timestamp, not guaranteed indefinite survival. This interpretation is grounded in the [Python active-Order example](https://www.mql5.com/en/docs/python_metatrader5/mt5ordersget_py), [expiration-mode definitions](https://www.mql5.com/en/book/automation/experts/experts_pending_expiration) and [symbol lifetime rules](https://www.mql5.com/en/book/automation/symbols/symbols_expiration). These references do not establish the selected Pepperstone Python bridge's timezone or active-Order contract.
 
 All timestamps are timezone-aware UTC. Tick age and future-clock drift are explicit. Candle requests are capped at 2,000 records and use one centralized duration map: M1=60, M5=300, M15=900, H1=3,600 seconds. A candle is complete exactly when `open_at + timeframe_duration <= current_utc_time`. `include_current=true` retains an active bucket as incomplete but does not mislabel closed historical rows; the default filters incomplete buckets. Rows remain ordered and duplicate-free, OHLC constraints are validated, invalid timestamps map to bounded read failures, and missing intervals produce gap metadata.
 
-Order/deal history is capped at 168 hours, sanitizes comments, excludes sensitive fields, and records current evidence separately for both queries. An empty native tuple is a valid empty result with reason `HISTORY_EMPTY_VALID_RESULT`; native `None` is a query failure. Evidence records a strictly positive requested window, completion at or after its end, returned count and returned-time bounds, result state, and a safe reason. Completing a bounded request does not claim broker retention outside that request.
+Order/deal history is capped at 168 hours, sanitizes comments, excludes sensitive fields, and records current evidence separately for both queries. Under the normalized history contract, historical orders are selected and evidenced by completion time, and deals by occurrence time. Missing order completion or returned event times outside the inclusive requested window prevent successful evidence; reconciliation retains the returned count and known bounds as `WINDOW_INCOMPLETE`. The fake adapter rejects an order whose missing completion prevents selection. An empty result from a supported query is represented by `HISTORY_EMPTY_VALID_RESULT`; native `None` is a query failure. Evidence records a strictly positive requested window, completion at or after its end, returned count and returned-time bounds, result state, and a safe reason. Completing a bounded request does not claim broker retention outside that request.
+
+The separately selected [market-time policy](MT5_MARKET_TIME_POLICY.md) alone still corrects only tick/bar data and blocks all four transaction methods. On 2026-09-28 the user accepted the existing operator references and authorized the separate [bounded transaction policy](MT5_TRANSACTION_TIME_POLICY.md) without additional native proof. That opt-in normalizes transaction labels and history transports while preserving strict source/binding, precision, coverage and reconciliation checks. It retains account-wide rows and tags their provenance for Shadow consumers. Empty inventory or diagnostic success does not auto-select it, and no unrun native smoke is claimed as passed.
 
 ## Polling, health, and reconciliation
+
+Failed native transaction/tick reads and failed full reconciliation immediately invalidate cached local Healthy state even for direct/manual cycle callers. The original bounded failure is propagated, reconciliation becomes required and tick freshness is cleared; a failed direct cycle does not renew heartbeats or dispatch success callbacks. Background polling retains its existing disconnect/backoff and failed-publication responsibility.
 
 The polling service has one cancellable non-daemon thread, bounded exponential reconnect backoff, injected jitter for deterministic tests, and a terminal shutdown barrier. No API call is permitted after shutdown. Three independently typed cadences separate 5-second tick/connection reads, 15-second Position plus active-Order observation, and 600-second full safety reconciliation by default. Startup and reconnect each require one full reconciliation before health can become Healthy. Lightweight polling continues at its bounded cadence while a connected read-capable state is degraded or blocked, preserving current liveness without restoring Healthy. A stable blocked condition does not trigger a full cycle on every short poll; a material account/tick/Position/active-Order change or recovery requires one new full reconciliation. Only full reconciliation performs bounded Order/Deal history queries or creates reconciliation rows; a normal short poll does neither.
 
 ### Component heartbeat ownership
+
+Terminal/account identity is checked before and after lightweight tick or Position/Order reads against the accepted full cycle, and again after tick persistence. Full reconciliation additionally rechecks the current confirmed database binding/state and observed specification around persistence. Detected changes prevent current Healthy output. Quotes are aged at the decision boundary without rewriting their original observation time or promoting an earlier unsafe classification. A non-live lightweight quote does not reach downstream tick consumers. These bounded checks detect observed inconsistencies; they do not promise an atomic snapshot across MT5, another terminal process and the database.
 
 The long-running poller has one central publication path and owns exactly three typed components:
 
@@ -161,6 +176,18 @@ The Web Console uses owner-scoped selects and maps rows through strict Zod contr
 
 ## Optional real-terminal smoke
 
+### Explicit local timestamp diagnostic
+
+The separately authorized follow-up command is `pnpm worker:mt5:tick-time`. It is not run automatically and is not the real smoke test. Supply the existing process-local terminal path, account fingerprint, broker symbol, and independently inspected specification confirmation before invoking it. Leave `AURUM_MT5_READONLY_SMOKE` unset; the diagnostic rejects smoke opt-in or nondefault 10/30-second freshness settings.
+
+It rechecks the bound Demo account and usable confirmed XAU/USD specification before exactly one allowed native tick read. JSON contains only native numeric `time` and `time_msc`, UTC interpretations, the UTC observation clock, selected-field provenance, whole-second agreement, signed age, and default-limit comparisons. Missing/zero milliseconds remain explicit. A disagreement or future timestamp remains evidence of an unresolved gate, not permission to rewrite time.
+
+Exit `0` with `status=observed` means only that diagnostic evidence was read and shutdown completed. It explicitly grants no eligibility and invokes no smoke. Policy blocks exit `2`; configuration, native technical, unexpected, and shutdown failures exit `3`. Failure output discards partial observations and includes only a bounded reason. The command exposes no account/server/terminal path, fingerprint, broker alias, raw structures, prices, exceptions, or credentials. It has no persistence/browser/heartbeat path and does not read candles, Positions, Orders, or histories. The normal read port and runtime normalization are unchanged.
+
+### Full read-only smoke
+
+The candle stage requires exactly five complete, consecutive, minute-aligned M1 bars for the requested symbol, no gap metadata, and a latest close at the current check minute. Short, stale, future or internally inconsistent series cannot pass. Deterministic fake coverage is not a real-terminal result.
+
 The command is:
 
 ```text
@@ -188,12 +215,14 @@ Milestone 2 completion result in this workspace:
 NOT RUN — REAL MT5 READ-ONLY SMOKE PRECONDITIONS NOT MET
 ```
 
-The optional official package was installed and imported locally, but no explicit Terminal path, broker symbol, opt-in flag, or already-open verified Demo session was supplied. This result is therefore not counted as a passing real-terminal smoke test.
+The optional official package was installed and imported locally, but no explicit Terminal path, broker symbol, opt-in flag, or already-open verified Demo session was supplied for that release. This result is therefore not counted as a passing real-terminal smoke test.
+
+In the later readiness investigation, the explicitly opted-in full native smoke returned `BLOCKED — RECONCILIATION_INCOMPLETE` at the unverified transaction-time contract; the bounded market-only check passed separately. No native smoke was rerun for the current Milestone 3 implementation. The [readiness record](MILESTONE_3_READINESS.md) preserves those outcomes and their scope.
 
 ## Test evidence and limits
 
 The deterministic source regressions cover account modes, strict connected state, actual XAU/USD validation and alias behavior, immutable confirmation comparison across repeated cycles, decimal/time validation, bucket-based candles, independent Order/Deal evidence, separated polling cadences, component allowlists, continuous heartbeat renewal, authoritative Worker caps, `reconciliation_required`, all five market-data mappings, persistence failure, reconnect backoff, cancellation, authoritative smoke exit codes, and no calls after shutdown. Web source regressions cover renewed-versus-expired heartbeats, missing/invalid evidence, blocked Worker state, delayed market data, Thai labels, and sensitive-field exclusion. Database source plans cover 400 assertions across nine pgTAP suites, including bounded repeated tick/heartbeat upserts, no routine audit growth, forced RLS, owner isolation, and least privilege.
 
-The final local run passed format, lint, TypeScript/Python type-check, 88 TypeScript tests, 233 Worker tests, production builds, security scans, dependency checks, two clean database resets, lint, 400 pgTAP assertions, four concurrent-claim assertions, and generated-type freshness. Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. The Windows job proves the package/native boundary without a Terminal; it does not replace the real-terminal smoke, which remains `NOT RUN`.
+The final Milestone 2 local run passed format, lint, TypeScript/Python type-check, 88 TypeScript tests, 233 Worker tests, production builds, security scans, dependency checks, two clean database resets, lint, 400 pgTAP assertions, four concurrent-claim assertions, and generated-type freshness. Pull Request run `33541088560` passed `quality`, `database`, and `windows-mt5-boundary` on implementation commit `3e25007`. The Windows job proves the package/native boundary without a Terminal; it does not replace the original release-time real-terminal smoke, which was `NOT RUN`, or the later blocked-native evidence.
 
-The fake does not prove a particular broker terminal, symbol naming convention, local installation, network availability, or hosted deployment. Those remain explicit operator/environment limitations. Milestone 3 is not started.
+The fake does not prove a particular broker terminal, symbol naming convention, local installation, network availability, or hosted deployment. Those remain explicit operator/environment limitations. Current Milestone 3 component work and verification are tracked separately in [the implementation document](MILESTONE_3_IMPLEMENTATION.md).

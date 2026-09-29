@@ -4,6 +4,8 @@
 
 Aurum Console is fail-closed and `DEMO ONLY`. Milestone 2 adds a Windows-only read boundary for an already-open MT5 Demo terminal plus sanitized reconciliation evidence. It remains intentionally incapable of writing to a broker, consuming a command, or modifying an Order or Position. Static fixtures and database schema foundations may illustrate future states, but they do not grant capability.
 
+Milestone 3 is **IN PROGRESS — PRODUCTION DEMO/SHADOW COMPONENTS; NOT COMPLETE**, authorized on 2026-09-22. Production market normalization, feature, and deterministic risk components have been added. Runtime orchestration, baseline strategy/Shadow proposals, durable persistence/journal, and dashboard integration remain pending. See [Milestone 3 implementation](MILESTONE_3_IMPLEMENTATION.md). Native transaction-time evidence remains unresolved, and native smoke has not been rerun for this implementation. No component may replace missing evidence with fixtures or clear the blocked native gate.
+
 ## Credential boundary
 
 No real credential is needed for Milestone 2. Do not read, request, print, log, commit, upload, or place into a prompt:
@@ -18,15 +20,16 @@ No real credential is needed for Milestone 2. Do not read, request, print, log, 
 
 ## Trust zones
 
-| Zone                  | Authority through Milestone 2                                                                                            | Explicitly prohibited                                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Browser / web app     | Render validated fixtures and read owner-authorized control-plane and sanitized MT5 observations                         | Broker access; direct operational DML; risk-result mutation; secrets; order/Position mutation                |
-| Authenticated actions | Call the nine narrow functions that create durable intents                                                               | Claiming/completing Worker commands; creating broker orders/executions; mutating Positions                   |
-| Shared contracts      | Validate typed data and deliberate persistence DTOs at runtime                                                           | Executing commands; inferring authorization from a valid payload                                             |
-| Python read Worker    | Poll allowed MT5 reads, normalize/mask observations, and reconcile through fake or Windows adapters                      | Command consumption; broker writes; real credentials; strategy, proposal, risk, approval, or execution logic |
-| Dedicated Worker role | Fake local claims may execute observation, reconciliation, heartbeat, incident, and M1 lifecycle functions for one owner | Browser use; unrelated-owner access; direct table DML; broker/order/execution/Position writes                |
-| Local Supabase        | Enforce schema, forced RLS, secured functions, queue, sanitized MT5 evidence, audit, and deterministic seed              | Remote linking/push; production credentials; external calls; broad browser grants                            |
-| Design references     | Supply visual and behavioral requirements                                                                                | Production runtime import, direct conversion to a monolith, or dependency on `support.js` / `_ds`            |
+| Zone                               | Current authority                                                                                                        | Explicitly prohibited                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Browser / web app                  | Render validated fixtures and read owner-authorized control-plane and sanitized MT5 observations                         | Broker access; direct operational DML; risk-result mutation; secrets; order/Position mutation          |
+| Authenticated actions              | Call the nine narrow functions that create durable intents                                                               | Claiming/completing Worker commands; creating broker orders/executions; mutating Positions             |
+| Shared contracts                   | Validate typed data and deliberate persistence DTOs at runtime                                                           | Executing commands; inferring authorization from a valid payload                                       |
+| Python read Worker                 | Poll allowed MT5 reads, normalize/mask observations, and reconcile through fake or Windows adapters                      | Command consumption; broker writes; credential access; approval or execution logic                     |
+| Market/feature and risk components | Validate supplied typed observations and policy, derive versioned features and deterministic risk results                | Substituting fixtures for missing real evidence; clearing native readiness; broker writes or execution |
+| Dedicated Worker role              | Fake local claims may execute observation, reconciliation, heartbeat, incident, and M1 lifecycle functions for one owner | Browser use; unrelated-owner access; direct table DML; broker/order/execution/Position writes          |
+| Local Supabase                     | Enforce schema, forced RLS, secured functions, queue, sanitized MT5 evidence, audit, and deterministic seed              | Remote linking/push; production credentials; external calls; broad browser grants                      |
+| Design references                  | Supply visual and behavioral requirements                                                                                | Production runtime import, direct conversion to a monolith, or dependency on `support.js` / `_ds`      |
 
 ## Fixed fail-closed rules
 
@@ -69,9 +72,10 @@ pnpm security
 
 If a check reports a possible secret, do not print the value. Remove it from the workspace and rotate it outside this project if it was real.
 
-## Future authorization gates
+## Current and future authorization gates
 
-- Milestones 3–4: reproducible Shadow proposals and simulated secured approval/command processing.
+- Milestone 3: authorized and in progress; integrated reproducible Shadow proposals and remaining delivery gates are pending.
+- Milestone 4: secured approval/command processing requires its separate authorization; no current component consumes commands.
 - Milestone 5: Demo execution only after explicit user authorization and all earlier gates pass.
 
 No milestone in the current repository authorizes Live Trading.

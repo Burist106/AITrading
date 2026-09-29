@@ -18,7 +18,11 @@ from aurum_worker.models.mt5 import (
     CandleGap,
     CandleObservation,
     HealthState,
+    LatestTickObservation,
+    Mt5ReadFailure,
     Mt5ReasonCode,
+    SafeMt5Error,
+    TickFreshness,
     Timeframe,
 )
 
@@ -87,6 +91,47 @@ def utc_from_epoch_milliseconds(milliseconds: int) -> datetime:
         raise ValueError("invalid millisecond epoch")
     seconds = Decimal(milliseconds) / Decimal(1_000)
     return utc_from_epoch(seconds)
+
+
+def decision_tick_state(
+    tick: LatestTickObservation,
+    *,
+    now: datetime,
+    max_tick_age_seconds: int,
+    max_clock_drift_seconds: int,
+) -> tuple[TickFreshness, Decimal]:
+    """Age an event at a decision boundary, never freshening its observation."""
+    if now.tzinfo is None or now.utcoffset() is None or now < tick.observed_at:
+        raise Mt5ReadFailure(
+            SafeMt5Error(
+                reason_code=Mt5ReasonCode.CLOCK_DRIFT_EXCEEDED,
+                safe_detail="Decision clock is invalid or precedes the observation.",
+            )
+        )
+    signed_age = Decimal(str((now - tick.tick_at).total_seconds()))
+    if signed_age < -max_clock_drift_seconds:
+        freshness = TickFreshness.FUTURE_INVALID
+    elif signed_age > max_tick_age_seconds:
+        freshness = TickFreshness.STALE
+    elif signed_age > Decimal(max_tick_age_seconds) / 2:
+        freshness = TickFreshness.DELAYED
+    else:
+        freshness = TickFreshness.LIVE
+    severity = {
+        TickFreshness.LIVE: 0,
+        TickFreshness.DELAYED: 1,
+        TickFreshness.STALE: 2,
+        TickFreshness.FUTURE_INVALID: 3,
+        TickFreshness.UNAVAILABLE: 4,
+    }
+    if severity[tick.freshness] > severity[freshness]:
+        freshness = tick.freshness
+    age = (
+        abs(signed_age)
+        if freshness is TickFreshness.FUTURE_INVALID
+        else max(signed_age, Decimal(0))
+    )
+    return freshness, age
 
 
 def mask_login(login: int | str) -> str:

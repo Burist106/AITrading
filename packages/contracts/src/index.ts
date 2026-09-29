@@ -9,5 +9,6 @@ export * from "./positions";
 export * from "./risk-checks";
 export * from "./risk-policy";
 export * from "./safety";
+export * from "./shadow";
 export * from "./scenarios";
 export * from "./trading";

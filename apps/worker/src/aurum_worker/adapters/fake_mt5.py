@@ -204,11 +204,18 @@ class FakeMt5ReadAdapter(Mt5ReadPort):
         self, request: HistoryRequest, *, trace_id: str
     ) -> list[HistoricalOrderObservation]:
         self._record("get_order_history")
-        return [
-            item.model_copy(update={"trace_id": trace_id})
-            for item in self.order_history
-            if request.start_at <= item.setup_at <= request.end_at
-        ]
+        selected: list[HistoricalOrderObservation] = []
+        for item in self.order_history:
+            if item.completed_at is None:
+                raise Mt5ReadFailure(
+                    SafeMt5Error(
+                        reason_code=Mt5ReasonCode.HISTORY_QUERY_FAILED,
+                        safe_detail="Fake order history has no completion time.",
+                    )
+                )
+            if request.start_at <= item.completed_at <= request.end_at:
+                selected.append(item.model_copy(update={"trace_id": trace_id}))
+        return selected
 
     def get_deal_history(
         self, request: HistoryRequest, *, trace_id: str
